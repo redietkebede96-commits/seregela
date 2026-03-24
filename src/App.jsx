@@ -167,11 +167,13 @@ const App = () => {
       ...rest,
       type,
       owner_id: ownerId,
+      owner_name: vehicle.ownerName, // Added owner_name
       total_seats: totalSeats
     });
   };
 
   const [selectingFor, setSelectingFor] = useState(null);
+  const [studentType, setStudentType] = useState('walking');
   const [addingVehicle, setAddingVehicle] = useState(null); // null | 'car' | 'bus'
   const [pendingAssignments, setPendingAssignments] = useState(null); // { studentIds }
   const [dismissedAlertIds, setDismissedAlertIds] = useState([]); // Array of alert IDs or stable keys
@@ -372,11 +374,11 @@ const App = () => {
             id: alertId,
             priority: 'high',
             type: 'walker_match',
-            ownerName: students.find(s => s.id === car.ownerId)?.name,
+            ownerName: car.ownerName || students.find(s => s.id === car.ownerId)?.name || 'Private',
             students: toAssign.map(s => s.name),
             dest: car.destination,
             recom: {
-              title: `Assign to ${students.find(s => s.id === car.ownerId)?.name}'s Car`,
+              title: `Assign to ${car.ownerName || students.find(s => s.id === car.ownerId)?.name || 'Private'}'s Car`,
               actionType: 'assign',
               studentIds: toAssign.map(s => s.id),
               vehicleId: car.id,
@@ -502,7 +504,7 @@ const App = () => {
     const phone = fd.get('phone').trim();
     const destination = toTitleCase(fd.get('destination').trim());
     const type = fd.get('type');
-    const seats = parseInt(fd.get('seats') || '0');
+    const seats = type === 'walking' ? 0 : parseInt(fd.get('seats') || '0');
 
     if (editingStudent) {
       const updated = { ...editingStudent, name, phone, destination, type };
@@ -532,8 +534,9 @@ const App = () => {
         setCars(prev => [...prev, newCar]);
         await syncVehicleToDb(newCar, 'car');
       }
-    }
     setAddingStudent(false);
+    setEditingStudent(null);
+    setStudentType('walking');
   };
 
   const handleDeleteStudent = async (studentId) => {
@@ -576,7 +579,7 @@ const App = () => {
         if (seats > 8) type = 'minibus';
         else if (seats > 0) type = 'car_owner';
         
-        return { name, phone, destination, seats, type };
+        return { name, phone, destination, seats: type === 'walking' ? 0 : seats, type };
       }).filter(r => r.name || r.type === 'minibus');
       setImportPreview(parsed);
 
@@ -598,6 +601,7 @@ const App = () => {
           phone: row.phone,
           destination: row.destination,
           type: row.type,
+          seats: row.type === 'walking' ? 0 : (row.seats || 0),
           assignedTo: null
         }));
 
@@ -678,29 +682,34 @@ const App = () => {
     const formData = new FormData(e.target);
     const ownerId = formData.get('ownerId'); // UUID
     
-    if (editingVehicle) {
-      const updated = { 
-        ...editingVehicle, 
-        ownerId, 
-        totalSeats: parseInt(formData.get('seats')), 
-        phone: formData.get('phone'),
-        destination: formData.get('destination') || students.find(s => s.id === ownerId).destination 
-      };
-      setCars(prev => prev.map(c => c.id === editingVehicle.id ? updated : c));
-      await syncVehicleToDb(updated, 'car');
-      setEditingVehicle(null);
-    } else {
-      const newCar = {
-        id: crypto.randomUUID(),
-        ownerId,
-        phone: formData.get('phone'),
-        destination: formData.get('destination') || students.find(s => s.id === ownerId).destination,
-        totalSeats: parseInt(formData.get('seats')),
-        occupied: 0
-      };
-      setCars(prev => [...prev, newCar]);
-      await syncVehicleToDb(newCar, 'car');
-    }
+      const ownerName = formData.get('ownerName');
+      const carOwner = students.find(s => s.name.toLowerCase() === ownerName.toLowerCase());
+      
+      if (editingVehicle) {
+        const updated = { 
+          ...editingVehicle, 
+          ownerId: carOwner?.id || null, 
+          ownerName,
+          totalSeats: parseInt(formData.get('seats')), 
+          phone: formData.get('phone'),
+          destination: formData.get('destination') || carOwner?.destination || '' 
+        };
+        setCars(prev => prev.map(c => c.id === editingVehicle.id ? updated : c));
+        await syncVehicleToDb(updated, 'car');
+        setEditingVehicle(null);
+      } else {
+        const newCar = {
+          id: crypto.randomUUID(),
+          ownerId: carOwner?.id || null,
+          ownerName,
+          phone: formData.get('phone'),
+          destination: formData.get('destination') || carOwner?.destination || '',
+          totalSeats: parseInt(formData.get('seats')),
+          occupied: 0
+        };
+        setCars(prev => [...prev, newCar]);
+        await syncVehicleToDb(newCar, 'car');
+      }
     setAddingVehicle(null);
   };
 
@@ -830,10 +839,8 @@ const App = () => {
             {!isMinibus ? (
               <>
                 <div style={{ marginBottom: '1rem' }}>
-                  <label className="label-metadata">Owner</label>
-                  <select name="ownerId" required defaultValue={editingVehicle?.ownerId} style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }}>
-                    {carOwners.map(s => <option key={s.id} value={s.id}>{s.name} ({s.destination})</option>)}
-                  </select>
+                  <label className="label-metadata">Owner Name</label>
+                  <input name="ownerName" required defaultValue={editingVehicle?.ownerName || (editingVehicle?.ownerId ? students.find(s => s.id === editingVehicle.ownerId)?.name : '')} placeholder="e.g. Alazar Kebede" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
                 </div>
                 <div style={{ marginBottom: '1rem' }}>
                   <label className="label-metadata">Owner Phone</label>
@@ -1313,8 +1320,8 @@ const App = () => {
         <button className="btn-import" style={{ flex: 1 }} onClick={() => fileInputRef.current?.click()}>
           <Upload size={16} /> Import Spreadsheet
         </button>
-        <button className="btn-minimal" style={{ flexShrink: 0, padding: '0.6rem 1rem' }} onClick={() => setAddingStudent(true)}>
-          <UserPlus size={14} /> Add
+        <button className="btn-minimal" style={{ flexShrink: 0, padding: '0.6rem 1rem' }} onClick={() => { setStudentType('walking'); setAddingStudent(true); }}>
+          <UserPlus size={14} /> Add Student
         </button>
       </div>
 
@@ -1367,7 +1374,7 @@ const App = () => {
                 <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
                   {student.phone && <a href={`tel:${student.phone}`} className="icon-btn" style={{ textDecoration: 'none' }}><Phone size={14} color="#2e7d32" /></a>}
                   <button className="icon-btn" onClick={() => setViewingStudent(student)}><Eye size={14} color="var(--on-surface-variant)" /></button>
-                  <button className="icon-btn" onClick={() => { setEditingStudent(student); setAddingStudent(true); }}><Pencil size={14} color="var(--primary)" /></button>
+                  <button className="icon-btn" onClick={() => { setStudentType(student.type); setEditingStudent(student); setAddingStudent(true); }}><Pencil size={14} color="var(--primary)" /></button>
                   <button className="icon-btn" onClick={() => handleDeleteStudent(student.id)}><Trash2 size={14} color="#ff4d4d" /></button>
                 </div>
               </div>
@@ -1408,7 +1415,7 @@ const App = () => {
           <div style={{ padding: '1.75rem' }}>
              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <h3 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>{students.find(s => s.id === car.ownerId)?.name}'s Car</h3>
+                <h3 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>{car.ownerName || students.find(s => s.id === car.ownerId)?.name || 'Private'} Car</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--on-surface-variant)' }}>
                   <div className="type-badge car-owner" style={{ fontSize: '0.5rem', padding: '0.1rem 0.3rem' }}>{getVehicleType(car.totalSeats)}</div>
                   <MapPin size={10} />
@@ -1800,15 +1807,22 @@ const App = () => {
               </div>
               <div style={{ marginBottom: '1rem' }}>
                 <label className="label-metadata">Type</label>
-                <select name="type" defaultValue={editingStudent?.type || 'walking'} style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }}>
+                <select 
+                  name="type" 
+                  value={studentType} 
+                  onChange={(e) => setStudentType(e.target.value)}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }}
+                >
                   <option value="walking">Walking Student</option>
                   <option value="car_owner">Car Owner</option>
                 </select>
               </div>
-              <div style={{ marginBottom: '1rem' }}>
-                <label className="label-metadata">Seats (if car owner)</label>
-                <input name="seats" type="number" defaultValue={editingStudent?.type === 'car_owner' ? (cars.find(c => c.ownerId === editingStudent?.id)?.totalSeats || 4) : 4} min="1" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
-              </div>
+              {studentType === 'car_owner' && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <label className="label-metadata">Seats (if car owner)</label>
+                  <input name="seats" type="number" defaultValue={editingStudent?.type === 'car_owner' ? (cars.find(c => c.ownerId === editingStudent?.id)?.totalSeats || 4) : 4} min="1" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
                 <button type="button" onClick={() => { setAddingStudent(false); setEditingStudent(null); }} style={{ flex: 1, padding: '0.75rem', background: 'none', border: 'none', fontWeight: 600 }}>Cancel</button>
                 <button type="submit" className="btn-primary" style={{ flex: 1, padding: '0.75rem' }}>{editingStudent ? 'Save Changes' : 'Add Student'}</button>
