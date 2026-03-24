@@ -424,7 +424,7 @@ const App = () => {
     });
 
     Object.entries(grouped).forEach(([dest, group]) => {
-      if (group.length > 3) {
+      if (group.length > 2) {
         // Only if no car can take them
         const hasCarMatch = updatedCars.some(c => c.totalSeats - c.occupied > 0 && isCompatible(c.destination, dest));
         if (!hasCarMatch) {
@@ -526,6 +526,10 @@ const App = () => {
           setCars(prev => [...prev, newCar]);
           await syncVehicleToDb(newCar, 'car');
         }
+      } else if (type === 'walking' && editingStudent.type === 'car_owner') {
+        // Remove car if switched to walking
+        setCars(prev => prev.filter(c => c.ownerId !== editingStudent.id));
+        await supabase.from('vehicles').delete().eq('owner_id', editingStudent.id);
       }
       setEditingStudent(null);
     } else {
@@ -1842,8 +1846,8 @@ const App = () => {
                   name="seats" 
                   type="number" 
                   disabled={studentType === 'walking'}
-                  value={studentType === 'walking' ? 0 : undefined}
-                  defaultValue={editingStudent?.type === 'car_owner' ? (cars.find(c => c.ownerId === editingStudent?.id)?.totalSeats || 4) : 4} 
+                  key={`${studentType}-${editingStudent?.id}`}
+                  defaultValue={studentType === 'walking' ? 0 : (editingStudent?.type === 'car_owner' ? (cars.find(c => c.ownerId === editingStudent?.id)?.totalSeats || 4) : 4)} 
                   min="1" 
                   style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)', background: studentType === 'walking' ? 'var(--surface-low)' : 'white' }} 
                 />
