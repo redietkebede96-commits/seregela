@@ -684,7 +684,7 @@ const App = () => {
         ownerId, 
         totalSeats: parseInt(formData.get('seats')), 
         phone: formData.get('phone'),
-        destination: students.find(s => s.id === ownerId).destination 
+        destination: formData.get('destination') || students.find(s => s.id === ownerId).destination 
       };
       setCars(prev => prev.map(c => c.id === editingVehicle.id ? updated : c));
       await syncVehicleToDb(updated, 'car');
@@ -694,7 +694,7 @@ const App = () => {
         id: crypto.randomUUID(),
         ownerId,
         phone: formData.get('phone'),
-        destination: students.find(s => s.id === ownerId).destination,
+        destination: formData.get('destination') || students.find(s => s.id === ownerId).destination,
         totalSeats: parseInt(formData.get('seats')),
         occupied: 0
       };
@@ -838,6 +838,10 @@ const App = () => {
                 <div style={{ marginBottom: '1rem' }}>
                   <label className="label-metadata">Owner Phone</label>
                   <input name="phone" required defaultValue={editingVehicle?.phone} placeholder="e.g. +251 9xx..." style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
+                </div>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label className="label-metadata">Route Destination</label>
+                  <input name="destination" required defaultValue={editingVehicle?.destination || carOwners.find(s => s.id === editingVehicle?.ownerId)?.destination} placeholder="e.g. Mexico, Jemo" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
                 </div>
               </>
             ) : (
