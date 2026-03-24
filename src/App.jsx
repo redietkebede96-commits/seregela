@@ -411,6 +411,7 @@ const App = () => {
             recom: {
               title: "Rent New Minibus",
               actionType: 'add_bus',
+              studentIds: group.map(s => s.id),
               details: `Priority 3: Meaningful cluster on ${dest} route requires mass transit.`
             }
           });
@@ -427,6 +428,7 @@ const App = () => {
         issues: [`Stranded: ${finalUnassigned.length} student(s) remain without any assignment.`],
         recom: {
           title: "Assign to Any Available Seat",
+          studentIds: finalUnassigned.map(s => s.id),
           details: "Yellow P1: Attempt to place in any car or minibus (at least to Taxi Station)."
         }
       });
