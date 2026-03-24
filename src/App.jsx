@@ -1574,8 +1574,8 @@ const App = () => {
   const AllocationsView = () => {
     const q = allocationSearch.toLowerCase();
     let allAllocations = [
-      ...cars.filter(c => c.occupied > 0).map(c => ({ ...c, type: 'car' })),
-      ...buses.filter(b => b.occupied > 0).map(b => ({ ...b, type: 'bus' }))
+      ...updatedCars.map(c => ({ ...c, type: 'car' })),
+      ...updatedBuses.map(b => ({ ...b, type: 'bus' }))
     ];
     if (q) {
       allAllocations = allAllocations.filter(item => {
