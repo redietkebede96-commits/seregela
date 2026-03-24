@@ -339,7 +339,8 @@ const App = () => {
     const isCompatible = (vDest, sDest) => {
       const vSegments = getPathSegments(vDest);
       const sSegments = getPathSegments(sDest);
-      return sSegments.some(seg => vSegments.includes(seg));
+      const shared = sSegments.filter(seg => vSegments.includes(seg) && seg !== 'mexico');
+      return shared.length > 0;
     };
 
     // --- RED ALERT PRIORITY 1: Unassigned walker + Matching Car ---
@@ -349,9 +350,18 @@ const App = () => {
       const candidates = unassignedWalkers
         .filter(s => !matchedWalkerIds.has(s.id) && isCompatible(car.destination, s.destination))
         .sort((a, b) => {
-          const aShared = getPathSegments(a.destination).filter(seg => getPathSegments(car.destination).includes(seg)).length;
-          const bShared = getPathSegments(b.destination).filter(seg => getPathSegments(car.destination).includes(seg)).length;
-          return bShared - aShared;
+          const aS = getPathSegments(a.destination);
+          const bS = getPathSegments(b.destination);
+          const vS = getPathSegments(car.destination);
+          
+          const aShared = aS.filter(seg => vS.includes(seg) && seg !== 'mexico').length;
+          const bShared = bS.filter(seg => vS.includes(seg) && seg !== 'mexico').length;
+          
+          // Bonus for matching final destination
+          const aExact = aS[aS.length - 1] === vS[vS.length - 1] ? 2 : 0;
+          const bExact = bS[bS.length - 1] === vS[vS.length - 1] ? 2 : 0;
+          
+          return (bShared + bExact) - (aShared + aExact);
         });
 
       if (candidates.length > 0) {
