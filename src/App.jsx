@@ -129,7 +129,8 @@ const App = () => {
           destination: c.destination,
           totalSeats: c.total_seats,
           phone: c.phone,
-          occupied: mappedStudents.filter(s => s.assignedTo === c.id).length
+          occupied: mappedStudents.filter(s => s.assignedTo === c.id).length,
+          ownerName: c.tariff // Hack: Load private ownerName from tariff column
         }));
         setCars(mappedCars);
 
@@ -162,17 +163,17 @@ const App = () => {
   };
 
   const syncVehicleToDb = async (vehicle, type) => {
-    const { ownerId, totalSeats, occupied, ownerName, ...rest } = vehicle;
+    const { ownerId, totalSeats, occupied, ownerName, tariff, ...rest } = vehicle;
     
     // Explicitly build the payload matching the snake_case database columns.
-    // We intentionally OMIT owner_name because the database schema update 
-    // did not complete, causing a 400 Bad Request error. The UI will 
-    // gracefully fallback to looking up the owner via owner_id or displaying "Private".
+    // Hack: We store ownerName in the tariff column for cars since cars do not use tariffs, 
+    // bypassing the need for an owner_name column which failed to create.
     const payload = {
       ...rest,
       type,
       owner_id: ownerId,
-      total_seats: totalSeats
+      total_seats: totalSeats,
+      tariff: type === 'car' ? ownerName : tariff
     };
     
     const { error } = await supabase.from('vehicles').upsert(payload);
@@ -1604,7 +1605,8 @@ const App = () => {
           allAllocations.map(item => {
             const assignedPassengers = students.filter(s => s.assignedTo === item.id);
             const owner = item.type === 'car' ? students.find(s => s.id === item.ownerId) : null;
-            const ownerName = (sharingLang === 'am' && translationCache[owner?.name]) ? translationCache[owner.name] : (owner?.name || 'Minibus');
+            const displayName = item.ownerName || owner?.name || (item.type === 'car' ? 'Private' : 'Minibus');
+            const ownerName = (sharingLang === 'am' && translationCache[displayName]) ? translationCache[displayName] : displayName;
             return (
             <div key={item.id} className="premium-card" style={{ padding: '0', overflow: 'hidden', marginBottom: '2.5rem' }}>
               <div 
