@@ -280,7 +280,7 @@ const App = () => {
     if (actionType === 'delete') {
       const targetId = vehicleId;
       if (targetId) {
-        await handleDeleteVehicle(targetId, true);
+        handleDeleteVehicle(targetId, true); // Don't await to keep UI responsive
       }
       return;
     }
@@ -517,11 +517,11 @@ const App = () => {
       if (type === 'car_owner') {
         const existingCar = cars.find(c => c.ownerId === editingStudent.id);
         if (existingCar) {
-          const updatedCar = { ...existingCar, destination, phone, totalSeats: seats || existingCar.totalSeats };
+          const updatedCar = { ...existingCar, destination, phone, ownerName: name, totalSeats: seats || existingCar.totalSeats };
           setCars(prev => prev.map(c => c.ownerId === editingStudent.id ? updatedCar : c));
           await syncVehicleToDb(updatedCar, 'car');
         } else {
-          const newCar = { id: crypto.randomUUID(), ownerId: editingStudent.id, destination, phone, totalSeats: seats || 4, occupied: 0 };
+          const newCar = { id: crypto.randomUUID(), ownerId: editingStudent.id, ownerName: name, destination, phone, totalSeats: seats || 4, occupied: 0 };
           setCars(prev => [...prev, newCar]);
           await syncVehicleToDb(newCar, 'car');
         }
@@ -533,7 +533,7 @@ const App = () => {
       await syncStudentToDb(newStudent);
       
       if (type === 'car_owner') {
-        const newCar = { id: crypto.randomUUID(), ownerId: newStudent.id, destination, phone, totalSeats: seats || 4, occupied: 0 };
+        const newCar = { id: crypto.randomUUID(), ownerId: newStudent.id, ownerName: name, destination, phone, totalSeats: seats || 4, occupied: 0 };
         setCars(prev => [...prev, newCar]);
         await syncVehicleToDb(newCar, 'car');
       }
@@ -1682,6 +1682,7 @@ const App = () => {
                 </button>
               </div>
             </div>
+            );
           })
         )}
       </motion.div>
@@ -1737,16 +1738,24 @@ const App = () => {
                   </div>
                 </div>
 
-                <div className="surface-card">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <MapPin size={16} color="var(--primary)" />
-                    <p className="label-metadata" style={{ fontSize: '0.6rem' }}>{s.destination.includes(',') ? 'Route Path' : 'Destination'}</p>
+                <div className="surface-card" style={{ background: 'var(--surface-low)', border: '1px solid var(--primary)', borderRadius: '1rem', padding: '1.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                    <MapPin size={22} color="var(--primary)" />
+                    <p className="label-metadata" style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 800 }}>{s.destination.includes(',') ? 'ROUTE PATH' : 'DESTINATION'}</p>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', paddingLeft: '0.25rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                     {s.destination.split(',').map((d, i, arr) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: i === arr.length - 1 ? 'var(--primary)' : 'var(--surface-high)', color: i === arr.length - 1 ? 'white' : 'var(--on-surface-variant)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
-                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{d.trim()}</span>
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span style={{ 
+                          width: '24px', height: '24px', borderRadius: '50%', 
+                          background: i === arr.length - 1 ? 'var(--primary)' : 'rgba(24,19,68,0.1)', 
+                          color: i === arr.length - 1 ? 'white' : 'var(--primary)', 
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                          fontSize: '0.75rem', fontWeight: 900, flexShrink: 0 
+                        }}>
+                          {i + 1}
+                        </span>
+                        <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--primary)' }}>{d.trim()}</span>
                       </div>
                     ))}
                   </div>
@@ -1826,12 +1835,19 @@ const App = () => {
                   <option value="car_owner">Car Owner</option>
                 </select>
               </div>
-              {studentType === 'car_owner' && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <label className="label-metadata">Seats (if car owner)</label>
-                  <input name="seats" type="number" defaultValue={editingStudent?.type === 'car_owner' ? (cars.find(c => c.ownerId === editingStudent?.id)?.totalSeats || 4) : 4} min="1" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
-                </div>
-              )}
+              <div style={{ marginBottom: '1rem', opacity: studentType === 'walking' ? 0.6 : 1 }}>
+                <label className="label-metadata">Seats Capacity</label>
+                <input 
+                  name="seats" 
+                  type="number" 
+                  disabled={studentType === 'walking'}
+                  value={studentType === 'walking' ? 0 : undefined}
+                  defaultValue={editingStudent?.type === 'car_owner' ? (cars.find(c => c.ownerId === editingStudent?.id)?.totalSeats || 4) : 4} 
+                  min="1" 
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)', background: studentType === 'walking' ? 'var(--surface-low)' : 'white' }} 
+                />
+                {studentType === 'walking' && <p style={{ fontSize: '0.55rem', marginTop: '0.25rem', color: 'var(--on-surface-variant)' }}>Walking students do not provide transport seats.</p>}
+              </div>
               <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
                 <button type="button" onClick={() => { setAddingStudent(false); setEditingStudent(null); }} style={{ flex: 1, padding: '0.75rem', background: 'none', border: 'none', fontWeight: 600 }}>Cancel</button>
                 <button type="submit" className="btn-primary" style={{ flex: 1, padding: '0.75rem' }}>{editingStudent ? 'Save Changes' : 'Add Student'}</button>
