@@ -246,8 +246,14 @@ const App = () => {
   // Assignment Logic
   const assignStudent = async (studentId, vehicleId) => {
     const student = students.find(s => s.id === studentId);
+    const vehicle = [...updatedCars, ...updatedBuses].find(v => v.id === vehicleId);
+
+    if (vehicle && vehicle.occupied >= vehicle.totalSeats) {
+      alert("⚠️ This vehicle is already full.");
+      return;
+    }
+
     const updatedStudent = { ...student, assignedTo: vehicleId };
-    
     setStudents(prev => prev.map(s => s.id === studentId ? updatedStudent : s));
     await syncStudentToDb(updatedStudent);
   };
@@ -282,6 +288,16 @@ const App = () => {
       setTempSeats(14); 
       setAddingVehicle('bus');
       return;
+    }
+
+    // Capacity Check for bulk assignment
+    const targetVehicle = [...updatedCars, ...updatedBuses].find(v => v.id === vehicleId);
+    if (targetVehicle) {
+      const freeSeats = targetVehicle.totalSeats - targetVehicle.occupied;
+      if (studentIds.length > freeSeats) {
+        alert(`❌ Cannot assign ${studentIds.length} students. Only ${freeSeats} seats available.`);
+        return;
+      }
     }
 
     // Optimistic UI update
@@ -966,7 +982,7 @@ const App = () => {
   const AssignmentModal = () => {
 
     if (!selectingFor) return null;
-    const target = selectingFor.type === 'car' ? cars.find(c => c.id === selectingFor.id) : buses.find(b => b.id === selectingFor.id);
+    const target = (selectingFor.type === 'car' ? updatedCars : updatedBuses).find(v => v.id === selectingFor.id);
     const eligibleStudents = unassignedStudents.filter(s => {
       if (s.type === 'car_owner') return false; // car owners drive, don't ride
       const vehicleStops = target.destination.split(',').map(d => d.trim().toLowerCase());
@@ -989,9 +1005,15 @@ const App = () => {
            </button>
         </div>
 
-        <div className="surface-card" style={{ marginBottom: '2rem', background: 'var(--primary)', color: 'white' }}>
-           <p className="label-metadata" style={{ color: 'rgba(255,255,255,0.6)' }}>Assigning to</p>
-           <p style={{ fontSize: '1.25rem', fontWeight: 600 }}>{selectingFor.type === 'car' ? 'Car' : 'Minibus'} ({target.destination})</p>
+        <div className="surface-card" style={{ marginBottom: '2rem', background: 'var(--primary)', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+           <div>
+             <p className="label-metadata" style={{ color: 'rgba(255,255,255,0.6)' }}>Assigning to</p>
+             <p style={{ fontSize: '1.25rem', fontWeight: 600 }}>{selectingFor.type === 'car' ? 'Car' : 'Minibus'} ({target.destination})</p>
+           </div>
+           <div style={{ textAlign: 'right' }}>
+             <p style={{ fontSize: '1.5rem', fontWeight: 800 }}>{target.occupied}<span style={{ opacity: 0.6, fontSize: '1rem' }}>/{target.totalSeats}</span></p>
+             <p className="label-metadata" style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.6rem' }}>Seats Occupied</p>
+           </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -1003,12 +1025,20 @@ const App = () => {
               <div 
                 key={student.id} 
                 className="surface-card" 
-                style={{ marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                onClick={() => {
-                  assignStudent(student.id, target.id);
-                  // Removed auto-close for multi-student selection
+                style={{ 
+                  marginBottom: '0.75rem', 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  opacity: target.occupied >= target.totalSeats ? 0.5 : 1,
+                  cursor: target.occupied >= target.totalSeats ? 'not-allowed' : 'pointer',
+                  border: target.occupied >= target.totalSeats ? 'none' : '1px solid var(--surface-high)'
                 }}
-
+                onClick={() => {
+                  if (target.occupied < target.totalSeats) {
+                    assignStudent(student.id, target.id);
+                  }
+                }}
               >
                 <div>
                   <span style={{ fontWeight: 600 }}>{student.name}</span>
@@ -1016,7 +1046,11 @@ const App = () => {
                     <MapPin size={10} /> Final: {getFinalDest(student.destination)}
                   </span>
                 </div>
-                <Plus size={18} style={{ color: 'var(--secondary)' }} />
+                {target.occupied >= target.totalSeats ? (
+                  <span className="label-metadata" style={{ color: '#ff4d4d', fontSize: '0.6rem' }}>FULL</span>
+                ) : (
+                  <Plus size={18} style={{ color: 'var(--secondary)' }} />
+                )}
               </div>
             ))
           )}
