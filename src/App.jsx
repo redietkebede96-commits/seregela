@@ -279,11 +279,9 @@ const App = () => {
 
     if (actionType === 'delete') {
       const targetId = vehicleId;
-      console.log("ALERT ACTION: DELETE", targetId);
+      window.alert("ACTION: DELETE, ID: " + targetId);
       if (targetId) {
-        handleDeleteVehicle(targetId, true); // Don't await to keep UI responsive
-      } else {
-        console.warn("DELETE action triggered but vehicleId is missing!");
+        handleDeleteVehicle(targetId, true);
       }
       return;
     }
@@ -755,6 +753,7 @@ const App = () => {
   };
 
   const handleDeleteVehicle = async (id, skipConfirm = false) => {
+    window.alert("handleDeleteVehicle CALLED FOR: " + id);
     if (!skipConfirm && !window.confirm("Are you sure you want to delete this vehicle? All assigned students will be unassigned.")) return;
 
     // Unassign students locally
