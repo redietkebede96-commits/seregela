@@ -279,8 +279,11 @@ const App = () => {
 
     if (actionType === 'delete') {
       const targetId = vehicleId;
+      console.log("ALERT ACTION: DELETE", targetId);
       if (targetId) {
         handleDeleteVehicle(targetId, true); // Don't await to keep UI responsive
+      } else {
+        console.warn("DELETE action triggered but vehicleId is missing!");
       }
       return;
     }
@@ -757,7 +760,12 @@ const App = () => {
     // Unassign students locally
     setStudents(prev => prev.map(s => s.assignedTo === id ? { ...s, assignedTo: null } : s));
     
-    if (cars.find(c => c.id === id)) {
+    console.log("DELETING VEHICLE:", id);
+    const isCar = cars.some(c => c.id === id);
+    const isBus = buses.some(b => b.id === id);
+    console.log("MATCH FOUND:", { isCar, isBus });
+
+    if (isCar) {
       setCars(prev => prev.filter(c => c.id !== id));
     } else {
       setBuses(prev => prev.filter(b => b.id !== id));
