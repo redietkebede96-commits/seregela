@@ -278,7 +278,10 @@ const App = () => {
     if (!studentIds || (studentIds.length === 0 && actionType === 'assign')) return;
 
     if (actionType === 'delete') {
-      await handleDeleteVehicle(vehicleId, true); // true = skip confirmation
+      const targetId = vehicleId;
+      if (targetId) {
+        await handleDeleteVehicle(targetId, true);
+      }
       return;
     }
 
@@ -534,6 +537,7 @@ const App = () => {
         setCars(prev => [...prev, newCar]);
         await syncVehicleToDb(newCar, 'car');
       }
+    }
     setAddingStudent(false);
     setEditingStudent(null);
     setStudentType('walking');
@@ -759,6 +763,9 @@ const App = () => {
       setBuses(prev => prev.filter(b => b.id !== id));
     }
 
+    // Sync DB: Explicitly unassign students first to ensure state consistency
+    await supabase.from('students').update({ assigned_vehicle_id: null }).eq('assigned_vehicle_id', id);
+    // Sync DB: Delete the vehicle
     await supabase.from('vehicles').delete().eq('id', id);
   };
 
@@ -1466,7 +1473,8 @@ const App = () => {
         </div>
       ))}
     </motion.div>
-  )};
+    );
+  };
 
   const MinibusView = () => {
     const q = busSearch.toLowerCase();
@@ -1546,7 +1554,8 @@ const App = () => {
         </div>
       ))}
     </motion.div>
-  )};
+    );
+  };
 
   const AllocationsView = () => {
     const q = allocationSearch.toLowerCase();
@@ -1673,7 +1682,7 @@ const App = () => {
                 </button>
               </div>
             </div>
-          )})
+          })
         )}
       </motion.div>
     );
