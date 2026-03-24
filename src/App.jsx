@@ -164,11 +164,14 @@ const App = () => {
   const syncVehicleToDb = async (vehicle, type) => {
     const { ownerId, totalSeats, occupied, ownerName, ...rest } = vehicle;
     
+    // Explicitly build the payload matching the snake_case database columns.
+    // We intentionally OMIT owner_name because the database schema update 
+    // did not complete, causing a 400 Bad Request error. The UI will 
+    // gracefully fallback to looking up the owner via owner_id or displaying "Private".
     const payload = {
       ...rest,
       type,
       owner_id: ownerId,
-      owner_name: ownerName,
       total_seats: totalSeats
     };
     
