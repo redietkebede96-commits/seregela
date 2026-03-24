@@ -275,16 +275,16 @@ const App = () => {
       setDismissedAlertIds(prev => [...prev, alertId]);
     }
 
-    if (!studentIds || (studentIds.length === 0 && actionType === 'assign')) return;
-
+    // Handle delete action FIRST - before studentIds guard, since delete alerts have no studentIds
     if (actionType === 'delete') {
       const targetId = vehicleId;
-      window.alert("ACTION: DELETE, ID: " + targetId);
       if (targetId) {
         handleDeleteVehicle(targetId, true);
       }
       return;
     }
+
+    if (!studentIds || (studentIds.length === 0 && actionType === 'assign')) return;
 
     if (actionType === 'add_bus') {
       const targetStudentId = studentIds[0];
@@ -753,18 +753,12 @@ const App = () => {
   };
 
   const handleDeleteVehicle = async (id, skipConfirm = false) => {
-    window.alert("handleDeleteVehicle CALLED FOR: " + id);
     if (!skipConfirm && !window.confirm("Are you sure you want to delete this vehicle? All assigned students will be unassigned.")) return;
 
     // Unassign students locally
     setStudents(prev => prev.map(s => s.assignedTo === id ? { ...s, assignedTo: null } : s));
     
-    console.log("DELETING VEHICLE:", id);
-    const isCar = cars.some(c => c.id === id);
-    const isBus = buses.some(b => b.id === id);
-    console.log("MATCH FOUND:", { isCar, isBus });
-
-    if (isCar) {
+    if (cars.find(c => c.id === id)) {
       setCars(prev => prev.filter(c => c.id !== id));
     } else {
       setBuses(prev => prev.filter(b => b.id !== id));
