@@ -162,14 +162,20 @@ const App = () => {
   };
 
   const syncVehicleToDb = async (vehicle, type) => {
-    const { ownerId, totalSeats, occupied, ...rest } = vehicle;
-    await supabase.from('vehicles').upsert({
+    const { ownerId, totalSeats, occupied, ownerName, ...rest } = vehicle;
+    
+    const payload = {
       ...rest,
       type,
       owner_id: ownerId,
-      owner_name: vehicle.ownerName, // Added owner_name
+      owner_name: ownerName,
       total_seats: totalSeats
-    });
+    };
+    
+    const { error } = await supabase.from('vehicles').upsert(payload);
+    if (error) {
+      console.error("Supabase upsert error:", error);
+    }
   };
 
   const [selectingFor, setSelectingFor] = useState(null);
