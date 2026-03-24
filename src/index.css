@@ -32,10 +32,11 @@
   padding: 0;
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'NokiaPureheadline', 'Inter', system-ui, -apple-system, sans-serif;
   background-color: var(--surface);
   color: var(--on-surface);
   line-height: 1.5;
@@ -43,11 +44,18 @@ body {
   min-height: 100vh;
 }
 
+@font-face {
+  font-family: 'NokiaPureheadline';
+  src: url('/Nokia Pureheadline Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+}
+
 h1, h2, h3, h4, .heading-authoritative {
-  font-family: 'Newsreader', serif;
+  font-family: 'NokiaPureheadline', 'Inter', system-ui, sans-serif;
   font-weight: 700;
   color: var(--primary);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 
 /* Layout Utilities */
@@ -98,7 +106,7 @@ h1, h2, h3, h4, .heading-authoritative {
   padding: 1.25rem 2rem;
   border-radius: var(--radius-xl);
   font-weight: 600;
-  font-family: 'Inter', sans-serif;
+  font-family: 'NokiaPureheadline', sans-serif;
   cursor: pointer;
   transition: opacity 0.2s;
   display: inline-flex;
@@ -147,12 +155,13 @@ h1, h2, h3, h4, .heading-authoritative {
 .display-metric {
   font-size: 3rem;
   font-weight: 700;
-  font-family: 'Newsreader', serif;
+  font-family: 'NokiaPureheadline', sans-serif;
   line-height: 1;
   color: var(--primary);
 }
 
 .label-metadata {
+  font-family: 'NokiaPureheadline', sans-serif;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -305,7 +314,7 @@ h1, h2, h3, h4, .heading-authoritative {
 .stat-cell .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
-  font-family: 'Newsreader', serif;
+  font-family: 'NokiaPureheadline', sans-serif;
   color: var(--primary);
   line-height: 1;
 }

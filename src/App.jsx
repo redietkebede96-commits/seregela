@@ -1,4 +1,9 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = 'https://nzxxvmkbsmsvntyxpnlk.supabase.co';
+const supabaseKey = 'sb_publishable_O8V7iQJifrDhutb8m5BNpA_VeU-e5d0';
+const supabase = createClient(supabaseUrl, supabaseKey);
 import { 
   Users, 
   Car, 
@@ -19,8 +24,13 @@ import {
   FileSpreadsheet,
   X,
   UserPlus,
-  Eye
+  Eye,
+  Bell,
+  ArrowRight,
+  UserCheck,
+  Hammer
 } from 'lucide-react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
@@ -28,51 +38,172 @@ import * as XLSX from 'xlsx';
 // Title Case utility — normalizes all text input
 const toTitleCase = (str) => str ? str.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.substr(1).toLowerCase()) : '';
 
-// Mock Data
-const INITIAL_STUDENTS = [
-  // Lives in Mexico
-  { id: 1, name: 'Abebe Kebede', destination: 'Mexico', type: 'walking', assignedTo: null, phone: '+251 911 123 456' },
-  { id: 2, name: 'Hana Girma', destination: 'Mexico', type: 'walking', assignedTo: null, phone: '+251 912 234 567' },
-  { id: 3, name: 'Dawit Tadesse', destination: 'Mexico', type: 'walking', assignedTo: null, phone: '+251 913 345 678' },
-  // Lives in Jemo, passes through Mexico
-  { id: 4, name: 'Meron Hailu', destination: 'Mexico, Jemo', type: 'walking', assignedTo: null, phone: '+251 914 456 789' },
-  { id: 5, name: 'Yonas Bekele', destination: 'Mexico, Jemo', type: 'walking', assignedTo: null, phone: '+251 915 567 890' },
-  { id: 6, name: 'Tigist Alemu', destination: 'Mexico, Jemo', type: 'walking', assignedTo: null, phone: '+251 916 678 901' },
-  // Lives in Sebeta, passes through Jemo and Mexico
-  { id: 7, name: 'Kidus Worku', destination: 'Mexico, Jemo, Sebeta', type: 'walking', assignedTo: null, phone: '+251 917 789 012' },
-  { id: 8, name: 'Liya Tesfaye', destination: 'Mexico, Jemo, Sebeta', type: 'walking', assignedTo: null, phone: '+251 918 890 123' },
-  { id: 9, name: 'Samuel Desta', destination: 'Mexico, Jemo, Sebeta', type: 'walking', assignedTo: null, phone: '+251 919 901 234' },
-  { id: 10, name: 'Bethlehem Assefa', destination: 'Mexico, Jemo, Sebeta', type: 'walking', assignedTo: null, phone: '+251 920 012 345' },
-  // Car owners in Sebeta — covering all routes
-  { id: 11, name: 'Fikadu Mengistu', destination: 'Mexico, Jemo, Sebeta', type: 'car_owner', assignedTo: null, phone: '+251 921 111 222' },
-  { id: 12, name: 'Selam Berhane', destination: 'Mexico, Jemo, Sebeta', type: 'car_owner', assignedTo: null, phone: '+251 922 333 444' },
-  { id: 13, name: 'Yared Gebre', destination: 'Mexico, Jemo', type: 'car_owner', assignedTo: null, phone: '+251 923 555 666' },
-  // More students
-  { id: 14, name: 'Eden Mulugeta', destination: 'Jemo', type: 'walking', assignedTo: null, phone: '+251 924 777 888' },
-  { id: 15, name: 'Natnael Solomon', destination: 'Jemo, Sebeta', type: 'walking', assignedTo: null, phone: '+251 925 999 000' },
-];
+const getVehicleType = (seats) => {
+  if (seats <= 4) return 'Sedan';
+  if (seats <= 8) return 'SUV/Van';
+  if (seats <= 15) return 'Minibus';
+  return 'Large Bus';
+};
 
-const INITIAL_CARS = [
-  { id: 'c1', ownerId: 11, destination: 'Mexico, Jemo, Sebeta', totalSeats: 4, occupied: 0, phone: '+251 921 111 222' },
-  { id: 'c2', ownerId: 12, destination: 'Mexico, Jemo, Sebeta', totalSeats: 5, occupied: 0, phone: '+251 922 333 444' },
-  { id: 'c3', ownerId: 13, destination: 'Mexico, Jemo', totalSeats: 4, occupied: 0, phone: '+251 923 555 666' },
-];
+const TRANSLATIONS = {
+  en: {
+    title: 'Transport Allocation',
+    ownerSuffix: "'s Car",
+    minibus: 'Minibus',
+    destination: 'Destination',
+    phone: 'Phone',
+    tariff: 'Tariff',
+    passengers: 'Passengers',
+    seatsRemaining: 'Seats Remaining',
+    footer: 'SUGU TRASIT COORDINATION',
+    walking: 'Walking Student',
+    carOwner: 'Car Owner'
+  },
+  am: {
+    title: 'የትራንስፖርት ድልድል',
+    ownerPrefix: 'የ',
+    ownerSuffix: ' መኪና',
+    minibus: 'ሚኒባስ',
+    destination: 'መድረሻ (Destination)',
+    phone: 'ስልክ (Phone)',
+    tariff: 'ታሪፍ',
+    passengers: 'ተሳፋሪዎች',
+    seatsRemaining: 'ቀሪ ወንበሮች',
+    footer: 'የሱባኤ ጉባኤ የትራንስፖርት አስተባባሪ',
+    walking: 'እግረኛ ተማሪ',
+    carOwner: 'ባለ መኪና'
+  }
+};
 
-const INITIAL_BUSES = [
-  { id: 'b1', destination: 'Mexico, Jemo, Sebeta', totalSeats: 20, occupied: 0, tariff: '50 Birr' },
-  { id: 'b2', destination: 'Mexico, Jemo', totalSeats: 15, occupied: 0, tariff: '30 Birr' },
-];
+const translateText = async (text, targetLang = 'am') => {
+  if (!text) return '';
+  // Check localStorage cache first
+  const cacheKey = `tr_${text}_${targetLang}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return cached;
 
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const result = data[0][0][0];
+    localStorage.setItem(cacheKey, result);
+    return result;
+  } catch (err) {
+    console.error('Translation error:', err);
+    return text;
+  }
+};
+
+
+// App Component
 const App = () => {
   const [view, setView] = useState('overview'); // overview | cars | minibuses | allocations
-  const [students, setStudents] = useState(INITIAL_STUDENTS);
-  const [cars, setCars] = useState(INITIAL_CARS);
-  const [buses, setBuses] = useState(INITIAL_BUSES);
+  const [students, setStudents] = useState([]);
+  const [cars, setCars] = useState([]);
+  const [buses, setBuses] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch data on load
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const { data: studentsData, error: sError } = await supabase.from('students').select('*');
+        const { data: vehiclesData, error: vError } = await supabase.from('vehicles').select('*');
+        
+        if (sError || vError) throw sError || vError;
+
+        // Map data back to app format
+        const mappedStudents = studentsData.map(s => ({
+          ...s,
+          assignedTo: s.assigned_vehicle_id
+        }));
+
+        setStudents(mappedStudents);
+        
+        const vData = vehiclesData || [];
+        const mappedCars = vData.filter(v => v.type === 'car').map(c => ({
+          id: c.id,
+          ownerId: c.owner_id,
+          destination: c.destination,
+          totalSeats: c.total_seats,
+          phone: c.phone,
+          occupied: mappedStudents.filter(s => s.assignedTo === c.id).length
+        }));
+        setCars(mappedCars);
+
+        const mappedBuses = vData.filter(v => v.type === 'bus').map(b => ({
+          id: b.id,
+          destination: b.destination,
+          totalSeats: b.total_seats,
+          tariff: b.tariff,
+          occupied: mappedStudents.filter(s => s.assignedTo === b.id).length
+        }));
+        setBuses(mappedBuses);
+
+      } catch (err) {
+        console.error('Fetch error:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+
+  // Sync state helpers
+  const syncStudentToDb = async (student) => {
+    const { assignedTo, ...rest } = student;
+    await supabase.from('students').upsert({
+      ...rest,
+      assigned_vehicle_id: assignedTo
+    });
+  };
+
+  const syncVehicleToDb = async (vehicle, type) => {
+    const { ownerId, totalSeats, occupied, ...rest } = vehicle;
+    await supabase.from('vehicles').upsert({
+      ...rest,
+      type,
+      owner_id: ownerId,
+      total_seats: totalSeats
+    });
+  };
+
   const [selectingFor, setSelectingFor] = useState(null);
   const [addingVehicle, setAddingVehicle] = useState(null); // null | 'car' | 'bus'
+  const [pendingAssignments, setPendingAssignments] = useState(null); // { studentIds }
+  const [dismissedAlertIds, setDismissedAlertIds] = useState([]); // Array of alert IDs or stable keys
   const [editingVehicle, setEditingVehicle] = useState(null); // null | vehicle object
   const [addingStudent, setAddingStudent] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [sharingLang, setSharingLang] = useState('en'); // 'en' | 'am'
+  const [translationCache, setTranslationCache] = useState({});
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  useEffect(() => {
+    if (sharingLang === 'am') {
+      const namesToTranslate = students
+        .filter(s => !translationCache[s.name])
+        .map(s => s.name);
+      
+      if (namesToTranslate.length > 0) {
+        setIsTranslating(true);
+        const translateAll = async () => {
+          const newCache = { ...translationCache };
+          for (const name of namesToTranslate) {
+            newCache[name] = await translateText(name);
+          }
+          setTranslationCache(newCache);
+          setIsTranslating(false);
+        };
+        translateAll();
+      }
+    }
+  }, [sharingLang, students, translationCache]);
+
   const [importPreview, setImportPreview] = useState(null); // parsed rows for preview
   const [studentFilter, setStudentFilter] = useState('all');
   const [studentSearch, setStudentSearch] = useState('');
@@ -87,98 +218,283 @@ const App = () => {
   // Computed State
   const unassignedStudents = students.filter(s => s.assignedTo === null && s.type === 'walking');
   const carOwners = students.filter(s => s.type === 'car_owner');
-  const carAssignedCount = students.filter(s => s.assignedTo?.startsWith('c')).length;
-  const busAssignedCount = students.filter(s => s.assignedTo?.startsWith('b')).length;
   const uniqueDestinations = [...new Set(students.map(s => s.destination))].length;
 
+  // Re-calculate occupied dynamically to ensure reactive UI
+  const updatedCars = useMemo(() => cars.map(c => ({
+    ...c,
+    occupied: students.filter(s => s.assignedTo === c.id).length
+  })), [cars, students]);
+
+  const updatedBuses = useMemo(() => buses.map(b => ({
+    ...b,
+    occupied: students.filter(s => s.assignedTo === b.id).length
+  })), [buses, students]);
+
+  const carAssignedCount = students.filter(s => s.assignedTo && updatedCars.find(c => c.id === s.assignedTo)).length;
+  // Simplified counts for performance/safety
+  const totalAssigned = students.filter(s => s.assignedTo).length;
+
+  // New state for modal form sync
+  const [tempSeats, setTempSeats] = useState(4);
+  useEffect(() => {
+    if (editingVehicle) setTempSeats(editingVehicle.totalSeats);
+    else if (addingVehicle === 'bus') setTempSeats(15);
+    else setTempSeats(4);
+  }, [editingVehicle, addingVehicle]);
+
   // Assignment Logic
-  const assignStudent = (studentId, vehicleId) => {
-    setStudents(prev => prev.map(s => 
-      s.id === studentId ? { ...s, assignedTo: vehicleId } : s
-    ));
+  const assignStudent = async (studentId, vehicleId) => {
+    const student = students.find(s => s.id === studentId);
+    const updatedStudent = { ...student, assignedTo: vehicleId };
     
-    if (vehicleId.startsWith('c')) {
-      setCars(prev => prev.map(c => 
-        c.id === vehicleId ? { ...c, occupied: c.occupied + 1 } : c
-      ));
-    } else {
-      setBuses(prev => prev.map(b => 
-        b.id === vehicleId ? { ...b, occupied: b.occupied + 1 } : b
-      ));
-    }
+    setStudents(prev => prev.map(s => s.id === studentId ? updatedStudent : s));
+    await syncStudentToDb(updatedStudent);
   };
 
-  const unassignStudent = (studentId) => {
+  const unassignStudent = async (studentId) => {
     const student = students.find(s => s.id === studentId);
     if (!student || !student.assignedTo) return;
 
-    const vehicleId = student.assignedTo;
-    
-    setStudents(prev => prev.map(s => 
-      s.id === studentId ? { ...s, assignedTo: null } : s
-    ));
+    const updatedStudent = { ...student, assignedTo: null };
+    setStudents(prev => prev.map(s => s.id === studentId ? updatedStudent : s));
+    await syncStudentToDb(updatedStudent);
+  };
 
-    if (vehicleId.startsWith('c')) {
-      setCars(prev => prev.map(c => 
-        c.id === vehicleId ? { ...c, occupied: c.occupied - 1 } : c
-      ));
-    } else {
-      setBuses(prev => prev.map(b => 
-        b.id === vehicleId ? { ...b, occupied: b.occupied - 1 } : b
-      ));
+  const handleApplyAssignment = async (studentIds, vehicleId, actionType = 'assign') => {
+    if (!studentIds || studentIds.length === 0) return;
+
+    if (actionType === 'delete') {
+      const confirmed = window.confirm("Are you sure you want to release and delete this underused minibus?");
+      if (confirmed) await handleDeleteVehicle(vehicleId);
+      return;
+    }
+
+    if (actionType === 'add_bus') {
+      const targetStudentId = studentIds[0];
+      const targetStudent = students.find(s => s.id === targetStudentId);
+      const alert = actionNeeded.find(a => 
+        (a.recom?.studentIds && a.recom.studentIds.includes(targetStudentId)) || 
+        (a.students && targetStudent && a.students.includes(targetStudent.name))
+      );
+      
+      setPendingAssignments({ studentIds, destination: alert?.dest || targetStudent?.destination || '' });
+      setTempSeats(14); 
+      setAddingVehicle('bus');
+      return;
+    }
+
+    // Optimistic UI update
+    setStudents(prev => prev.map(s => 
+      studentIds.includes(s.id) ? { ...s, assignedTo: vehicleId } : s
+    ));
+    
+    // Sync to DB using update().in() for reliability with partial data
+    const { error } = await supabase
+      .from('students')
+      .update({ assigned_vehicle_id: vehicleId })
+      .in('id', studentIds);
+
+    if (error) {
+      console.error("Error applying assignment:", error);
+      alert("Failed to sync assignment to database: " + error.message);
+      // Revert local state on failure
+      const { data: refreshed } = await supabase.from('students').select('*');
+      if (refreshed) {
+        setStudents(refreshed.map(s => ({ ...s, assignedTo: s.assigned_vehicle_id })));
+      }
     }
   };
 
+  // Detailed Action Needed Analysis (Logic moved here for scoping)
+  const actionNeeded = useMemo(() => {
+    const alerts = [];
+    const unassignedWalkers = students.filter(s => s.type === 'walking' && !s.assignedTo);
+    
+    // Helper: Path Matching with Null Guards
+    const getPathSegments = (dest) => (dest || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
+    const isCompatible = (vDest, sDest) => {
+      const vSegments = getPathSegments(vDest);
+      const sSegments = getPathSegments(sDest);
+      return sSegments.some(seg => vSegments.includes(seg));
+    };
+
+    // --- RED ALERT PRIORITY 1: Unassigned walker + Matching Car ---
+    const matchedWalkerIds = new Set();
+    cars.filter(c => c.totalSeats - c.occupied > 0).forEach(car => {
+      let freeSeats = car.totalSeats - car.occupied;
+      const compatibleWalkers = unassignedWalkers
+        .filter(s => !matchedWalkerIds.has(s.id) && isCompatible(car.destination, s.destination))
+        .sort((a, b) => {
+          // Priority: Farthest along driver's destination (more shared segments)
+          const aShared = getPathSegments(a.destination).filter(seg => getPathSegments(car.destination).includes(seg)).length;
+          const bShared = getPathSegments(b.destination).filter(seg => getPathSegments(car.destination).includes(seg)).length;
+          return bShared - aShared;
+        });
+
+      if (compatibleWalkers.length > 0) {
+        const toAssign = compatibleWalkers.slice(0, freeSeats);
+        toAssign.forEach(s => matchedWalkerIds.add(s.id));
+        const owner = students.find(s => s.id === car.ownerId);
+        alerts.push({
+          type: 'walker_match',
+          priority: 'high',
+          dest: car.destination,
+          students: toAssign.map(s => s.name),
+          issues: [`Critical: ${toAssign.length} matching walker(s) can fit in ${owner?.name}'s car.`],
+          recom: {
+            title: `Assign to ${owner?.name}'s Car`,
+            vehicleId: car.id,
+            studentIds: toAssign.map(s => s.id),
+            details: `Priority 1: Fill available car seats on ${car.destination} route.`
+          }
+        });
+      }
+    });
+
+    // --- RED ALERT PRIORITY 2: Underused Minibus (< 3 students) ---
+    buses.filter(bus => bus.occupied > 0 && bus.occupied < 3).forEach(bus => {
+      alerts.push({
+        type: 'underused_bus',
+        priority: 'high',
+        dest: bus.destination,
+        issues: [`Inefficiency: Minibus has only ${bus.occupied} student(s). Suggest removing.`],
+        recom: {
+          title: "Release & Reassign Minibus",
+          vehicleId: bus.id,
+          actionType: 'delete',
+          details: "Priority 2: Avoiding inefficient minibus rental for too few riders."
+        }
+      });
+    });
+
+    // --- RED ALERT PRIORITY 3: Unserved Cluster (> 3 students) ---
+    const remainingAfterP1 = unassignedWalkers.filter(s => !matchedWalkerIds.has(s.id));
+    const destGroups = {};
+    remainingAfterP1.forEach(s => {
+      const primaryDest = getPathSegments(s.destination)[0];
+      if (!destGroups[primaryDest]) destGroups[primaryDest] = [];
+      destGroups[primaryDest].push(s);
+    });
+
+    Object.entries(destGroups).forEach(([dest, group]) => {
+      if (group.length > 3) {
+        // Check if any car has space for this route (already checked in P1, but just in case of new cars)
+        const carMatch = cars.some(c => (c.totalSeats - c.occupied > 0) && isCompatible(c.destination, dest));
+        if (!carMatch) {
+          alerts.push({
+            type: 'unserved_cluster',
+            priority: 'high',
+            dest: toTitleCase(dest),
+            students: group.map(s => s.name),
+            issues: [`Cluster: ${group.length} unassigned students detected with no car coverage.`],
+            recom: {
+              title: "Rent New Minibus",
+              actionType: 'add_bus',
+              details: `Priority 3: Meaningful cluster on ${dest} route requires mass transit.`
+            }
+          });
+        }
+      }
+    });
+
+    // --- YELLOW ALERT PRIORITY 1: Stranded Students (1-2) ---
+    const finalUnassigned = students.filter(s => s.type === 'walking' && !s.assignedTo && !matchedWalkerIds.has(s.id));
+    if (finalUnassigned.length >= 1 && finalUnassigned.length <= 2) {
+      alerts.push({
+        type: 'stranded_students',
+        priority: 'medium',
+        issues: [`Stranded: ${finalUnassigned.length} student(s) remain without any assignment.`],
+        recom: {
+          title: "Assign to Any Available Seat",
+          details: "Yellow P1: Attempt to place in any car or minibus (at least to Taxi Station)."
+        }
+      });
+    }
+
+    // --- YELLOW ALERT PRIORITY 2: Car Optimization (Partial matching) ---
+    cars.filter(c => c.totalSeats - c.occupied > 0).forEach(car => {
+      // If this car wasn't fully utilized in P1
+      const isUsedInP1 = alerts.some(a => a.recom?.vehicleId === car.id);
+      if (!isUsedInP1) {
+        alerts.push({
+          type: 'car_optimization',
+          priority: 'medium',
+          dest: car.destination,
+          issues: [`Unused Capacity: Car to ${car.destination} has free seats.`],
+          recom: {
+            title: "Offer Taxi Station Drop",
+            details: "Yellow P2: Suggest using seat for nearby walkers or partial segments."
+          }
+        });
+      }
+    });
+
+    // --- FINAL FILTER: Remove Dismissed Alerts ---
+    return alerts.map(a => {
+      // Create a stable ID based on unique characteristics
+      const studentHash = a.recom?.studentIds ? [...a.recom.studentIds].sort().join('') : (a.students ? a.students.sort().join('') : '');
+      const id = `${a.type}_${a.dest || ''}_${studentHash}_${a.recom?.vehicleId || ''}`;
+      return { ...a, id };
+    }).filter(a => !dismissedAlertIds.includes(a.id));
+  }, [students, cars, buses, dismissedAlertIds]);
+
+
   // Student CRUD Handlers
-  const handleAddStudent = (e) => {
+  const handleAddStudent = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const name = toTitleCase(fd.get('name').trim());
+    if (!name) return;
+
     const phone = fd.get('phone').trim();
     const destination = toTitleCase(fd.get('destination').trim());
     const type = fd.get('type');
     const seats = parseInt(fd.get('seats') || '0');
-    if (!name) return;
 
     if (editingStudent) {
-      setStudents(prev => prev.map(s =>
-        s.id === editingStudent.id
-          ? { ...s, name, phone, destination, type, ...(type === 'car_owner' ? {} : {}) }
-          : s
-      ));
-      // Update car if car_owner
+      const updated = { ...editingStudent, name, phone, destination, type };
+      setStudents(prev => prev.map(s => s.id === editingStudent.id ? updated : s));
+      await syncStudentToDb(updated);
+      
       if (type === 'car_owner') {
-        setCars(prev => {
-          const existing = prev.find(c => c.ownerId === editingStudent.id);
-          if (existing) {
-            return prev.map(c => c.ownerId === editingStudent.id ? { ...c, destination, phone, totalSeats: seats || c.totalSeats } : c);
-          } else {
-            return [...prev, { id: `c${Date.now()}`, ownerId: editingStudent.id, destination, phone, totalSeats: seats || 4, occupied: 0 }];
-          }
-        });
+        const existingCar = cars.find(c => c.ownerId === editingStudent.id);
+        if (existingCar) {
+          const updatedCar = { ...existingCar, destination, phone, totalSeats: seats || existingCar.totalSeats };
+          setCars(prev => prev.map(c => c.ownerId === editingStudent.id ? updatedCar : c));
+          await syncVehicleToDb(updatedCar, 'car');
+        } else {
+          const newCar = { id: crypto.randomUUID(), ownerId: editingStudent.id, destination, phone, totalSeats: seats || 4, occupied: 0 };
+          setCars(prev => [...prev, newCar]);
+          await syncVehicleToDb(newCar, 'car');
+        }
       }
       setEditingStudent(null);
     } else {
-      const newId = Date.now();
-      const newStudent = { id: newId, name, phone, destination, type, assignedTo: null };
+      const newStudent = { id: crypto.randomUUID(), name, phone, destination, type, assignedTo: null };
       setStudents(prev => [...prev, newStudent]);
-      // Auto-create car entry for car owners
+      await syncStudentToDb(newStudent);
+      
       if (type === 'car_owner') {
-        setCars(prev => [...prev, { id: `c${newId}`, ownerId: newId, destination, phone, totalSeats: seats || 4, occupied: 0 }]);
+        const newCar = { id: crypto.randomUUID(), ownerId: newStudent.id, destination, phone, totalSeats: seats || 4, occupied: 0 };
+        setCars(prev => [...prev, newCar]);
+        await syncVehicleToDb(newCar, 'car');
       }
     }
     setAddingStudent(false);
   };
 
-  const handleDeleteStudent = (studentId) => {
+  const handleDeleteStudent = async (studentId) => {
     if (!window.confirm('Delete this student? They will be unassigned from any vehicle.')) return;
     const student = students.find(s => s.id === studentId);
-    if (student?.assignedTo) unassignStudent(studentId);
+    
+    // Optimistic UI
     setStudents(prev => prev.filter(s => s.id !== studentId));
-    // Remove associated car if car_owner
     if (student?.type === 'car_owner') {
       setCars(prev => prev.filter(c => c.ownerId !== studentId));
     }
+    
+    await supabase.from('students').delete().eq('id', studentId);
   };
 
   // Spreadsheet Import
@@ -203,115 +519,186 @@ const App = () => {
         const phone = phoneKey ? String(row[phoneKey]).trim() : '';
         const destination = destKey ? toTitleCase(String(row[destKey]).trim()) : '';
         const seats = seatsKey ? parseInt(row[seatsKey]) || 0 : 0;
-        return { name, phone, destination, seats, type: seats > 0 ? 'car_owner' : 'walking' };
-      }).filter(r => r.name);
+        
+        let type = 'walking';
+        if (seats > 8) type = 'minibus';
+        else if (seats > 0) type = 'car_owner';
+        
+        return { name, phone, destination, seats, type };
+      }).filter(r => r.name || r.type === 'minibus');
       setImportPreview(parsed);
+
     };
     reader.readAsArrayBuffer(file);
     e.target.value = ''; // reset input
   };
 
-  const confirmImport = () => {
+  const confirmImport = async () => {
     if (!importPreview) return;
-    const newStudents = importPreview.map((row, i) => ({
-      id: Date.now() + i,
-      name: row.name,
-      phone: row.phone,
-      destination: row.destination,
-      type: row.type,
-      assignedTo: null
-    }));
-    const newCars = importPreview
-      .filter(r => r.type === 'car_owner')
-      .map((row, i) => {
-        const studentId = newStudents.find(s => s.name === row.name)?.id;
-        return {
-          id: `c${Date.now() + i + 1000}`,
-          ownerId: studentId,
+    setIsLoading(true);
+
+    try {
+      const newStudents = importPreview
+        .filter(r => r.name && r.type !== 'minibus')
+        .map((row) => ({
+          id: crypto.randomUUID(),
+          name: row.name,
+          phone: row.phone,
+          destination: row.destination,
+          type: row.type,
+          assignedTo: null
+        }));
+
+    const newVehicles = [];
+    
+    // Add car owners
+    importPreview.filter(r => r.type === 'car_owner').forEach(row => {
+      const student = newStudents.find(s => s.name === row.name);
+      if (student) {
+        newVehicles.push({
+          id: crypto.randomUUID(),
+          type: 'car',
+          ownerId: student.id,
           destination: row.destination,
           phone: row.phone,
           totalSeats: row.seats || 4,
           occupied: 0
-        };
+        });
+      }
+    });
+
+    // Add minibuses
+    importPreview.filter(r => r.type === 'minibus').forEach(row => {
+      newVehicles.push({
+        id: crypto.randomUUID(),
+        type: 'bus',
+        destination: row.destination,
+        totalSeats: row.seats || 15,
+        occupied: 0,
+        tariff: 'Unspecified'
       });
+    });
+
+    // Update local state
     setStudents(prev => [...prev, ...newStudents]);
-    setCars(prev => [...prev, ...newCars]);
-    setImportPreview(null);
+    setCars(prev => [...prev, ...newVehicles.filter(v => v.type === 'car')]);
+    setBuses(prev => [...prev, ...newVehicles.filter(v => v.type === 'bus')]);
+
+    // Sync to DB
+    const studentUpdates = newStudents.map(s => ({
+      id: s.id,
+      name: s.name,
+      phone: s.phone,
+      destination: s.destination,
+      type: s.type
+    }));
+    const vehicleUpdates = newVehicles.map(v => ({
+      id: v.id,
+      type: v.type,
+      owner_id: v.ownerId,
+      destination: v.destination,
+      total_seats: v.totalSeats,
+      tariff: v.tariff,
+      phone: v.phone
+    }));
+
+    const { error: sError } = await supabase.from('students').insert(studentUpdates);
+    const { error: vError } = await supabase.from('vehicles').insert(vehicleUpdates);
+
+    if (sError || vError) {
+      console.error("Import sync error:", sError || vError);
+      alert("Failed to import to database: " + (sError?.message || vError?.message));
+    } else {
+      // Only clear preview if successful
+      setImportPreview(null);
+    }
+    } catch (err) {
+      console.error("Import error:", err);
+      alert("An unexpected error occurred during import.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Vehicle Addition/Edition Handlers
-  const handleAddCar = (e) => {
+  const handleAddCar = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const ownerId = parseInt(formData.get('ownerId'));
+    const ownerId = formData.get('ownerId'); // UUID
     
     if (editingVehicle) {
-      setCars(prev => prev.map(c => 
-        c.id === editingVehicle.id 
-          ? { 
-              ...c, 
-              ownerId, 
-              totalSeats: parseInt(formData.get('seats')), 
-              phone: formData.get('phone'),
-              destination: students.find(s => s.id === ownerId).destination 
-            }
-          : c
-      ));
+      const updated = { 
+        ...editingVehicle, 
+        ownerId, 
+        totalSeats: parseInt(formData.get('seats')), 
+        phone: formData.get('phone'),
+        destination: students.find(s => s.id === ownerId).destination 
+      };
+      setCars(prev => prev.map(c => c.id === editingVehicle.id ? updated : c));
+      await syncVehicleToDb(updated, 'car');
       setEditingVehicle(null);
     } else {
       const newCar = {
-        id: `c${Date.now()}`,
+        id: crypto.randomUUID(),
         ownerId,
         phone: formData.get('phone'),
         destination: students.find(s => s.id === ownerId).destination,
         totalSeats: parseInt(formData.get('seats')),
         occupied: 0
       };
-      setCars([...cars, newCar]);
+      setCars(prev => [...prev, newCar]);
+      await syncVehicleToDb(newCar, 'car');
     }
     setAddingVehicle(null);
   };
 
-  const handleAddBus = (e) => {
+  const handleAddBus = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     
     if (editingVehicle) {
-      setBuses(prev => prev.map(b => 
-        b.id === editingVehicle.id 
-          ? { 
-              ...b, 
-              destination: formData.get('destination'), 
-              totalSeats: parseInt(formData.get('seats')), 
-              tariff: formData.get('tariff') 
-            }
-          : b
-      ));
+      const updated = { 
+        ...editingVehicle, 
+        destination: formData.get('destination'), 
+        totalSeats: parseInt(formData.get('seats')), 
+        tariff: formData.get('tariff') 
+      };
+      setBuses(prev => prev.map(b => b.id === editingVehicle.id ? updated : b));
+      await syncVehicleToDb(updated, 'bus');
       setEditingVehicle(null);
     } else {
       const newBus = {
-        id: `b${Date.now()}`,
+        id: crypto.randomUUID(),
         destination: formData.get('destination'),
         totalSeats: parseInt(formData.get('seats')),
         occupied: 0,
         tariff: formData.get('tariff')
       };
-      setBuses([...buses, newBus]);
+      setBuses(prev => [...prev, newBus]);
+      await syncVehicleToDb(newBus, 'bus');
+      
+      // Auto-assign pending students if this bus was created via alert
+      if (pendingAssignments) {
+        await handleApplyAssignment(pendingAssignments.studentIds, newBus.id);
+        setPendingAssignments(null);
+      }
     }
     setAddingVehicle(null);
   };
 
-  const handleDeleteVehicle = (id) => {
+  const handleDeleteVehicle = async (id) => {
     if (!window.confirm("Are you sure you want to delete this vehicle? All assigned students will be unassigned.")) return;
 
-    // Unassign students
+    // Unassign students locally
     setStudents(prev => prev.map(s => s.assignedTo === id ? { ...s, assignedTo: null } : s));
     
-    if (id.startsWith('c')) {
+    if (cars.find(c => c.id === id)) {
       setCars(prev => prev.filter(c => c.id !== id));
     } else {
       setBuses(prev => prev.filter(b => b.id !== id));
     }
+
+    await supabase.from('vehicles').delete().eq('id', id);
   };
 
   const handleShare = async (id) => {
@@ -353,8 +740,11 @@ const App = () => {
   // Modals
   const AddVehicleModal = () => {
     const isEditing = !!editingVehicle;
-    const type = addingVehicle || (editingVehicle?.id.startsWith('c') ? 'car' : 'bus');
     if (!addingVehicle && !editingVehicle) return null;
+    
+    // Uses lifted state tempSeats
+    const vehicleClass = getVehicleType(tempSeats);
+    const isMinibus = tempSeats > 8;
 
     return (
       <motion.div 
@@ -362,12 +752,30 @@ const App = () => {
         style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(24,19,68,0.95)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
       >
         <div className="premium-card" style={{ width: '100%', maxWidth: '400px', background: 'white' }}>
-          <h2 style={{ marginBottom: '1.5rem' }}>
-            {isEditing ? `Edit ${type === 'car' ? 'Car' : 'Minibus'}` : (type === 'car' ? 'Register New Car' : 'Add Minibus')}
-          </h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <h2 style={{ fontSize: '1.25rem' }}>
+                {isEditing ? `Edit ${isMinibus ? 'Minibus' : 'Car'}` : (isMinibus ? 'Add Minibus' : 'Register New Car')}
+              </h2>
+              <div style={{ background: isMinibus ? 'var(--secondary)' : 'var(--primary)', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '0.4rem', fontSize: '0.5rem', fontWeight: 700, textTransform: 'uppercase' }}>
+                {vehicleClass}
+              </div>
+            </div>
+            <button onClick={() => { setAddingVehicle(null); setEditingVehicle(null); }} style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(0,0,0,0.05)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <X size={16} color="var(--on-surface-variant)" />
+            </button>
+          </div>
           
-          <form onSubmit={type === 'car' ? handleAddCar : handleAddBus}>
-            {type === 'car' ? (
+          <form onSubmit={isMinibus ? handleAddBus : handleAddCar}>
+            <div style={{ marginBottom: '1rem' }}>
+              <label className="label-metadata">Total Seats</label>
+              <input name="seats" type="number" required defaultValue={tempSeats} onChange={(e) => setTempSeats(parseInt(e.target.value) || 0)} min="1" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
+              <p style={{ fontSize: '0.6rem', color: 'var(--on-surface-variant)', marginTop: '0.25rem' }}>
+                {isMinibus ? 'Admin: Pricing (Tariff) required for mass transit.' : 'Private vehicle owned by a student/parent.'}
+              </p>
+            </div>
+
+            {!isMinibus ? (
               <>
                 <div style={{ marginBottom: '1rem' }}>
                   <label className="label-metadata">Owner</label>
@@ -377,33 +785,25 @@ const App = () => {
                 </div>
                 <div style={{ marginBottom: '1rem' }}>
                   <label className="label-metadata">Owner Phone</label>
-                  <input name="phone" required defaultValue={editingVehicle?.phone} placeholder="e.g. +1 555 0123" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
-                </div>
-                <div style={{ marginBottom: '1rem' }}>
-                  <label className="label-metadata">Total Seats</label>
-                  <input name="seats" type="number" defaultValue={editingVehicle?.totalSeats || "4"} required style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
+                  <input name="phone" required defaultValue={editingVehicle?.phone} placeholder="e.g. +251 9xx..." style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
                 </div>
               </>
             ) : (
               <>
                 <div style={{ marginBottom: '1rem' }}>
-                  <label className="label-metadata">Destination</label>
-                  <input name="destination" required defaultValue={editingVehicle?.destination} placeholder="e.g. Downtown" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
+                  <label className="label-metadata">Route Destination</label>
+                  <input name="destination" required defaultValue={editingVehicle?.destination} placeholder="e.g. Mexico, Jemo" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
                 </div>
                 <div style={{ marginBottom: '1rem' }}>
-                  <label className="label-metadata">Total Seats</label>
-                  <input name="seats" type="number" defaultValue={editingVehicle?.totalSeats || "20"} required style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
-                </div>
-                <div style={{ marginBottom: '1rem' }}>
-                  <label className="label-metadata">Tariff</label>
-                  <input name="tariff" required defaultValue={editingVehicle?.tariff} placeholder="e.g. $8.00" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
+                  <label className="label-metadata">Tariff / Pricing</label>
+                  <input name="tariff" required defaultValue={editingVehicle?.tariff} placeholder="e.g. 50 Birr" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
                 </div>
               </>
             )}
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
               <button type="button" onClick={() => { setAddingVehicle(null); setEditingVehicle(null); }} style={{ flex: 1, padding: '0.75rem', background: 'none', border: 'none', fontWeight: 600 }}>Cancel</button>
-              <button type="submit" className="btn-primary" style={{ flex: 1, padding: '0.75rem' }}>{isEditing ? 'Save Changes' : 'Create'}</button>
+              <button type="submit" className="btn-primary" style={{ flex: 1, padding: '0.75rem' }}>{isEditing ? 'Save Changes' : (isMinibus ? 'Add Minibus' : 'Register Car')}</button>
             </div>
           </form>
         </div>
@@ -411,7 +811,160 @@ const App = () => {
     );
   };
 
+
+  const NotificationDrawer = ({ isOpen, onClose, alerts, onApply, onDismiss, setView, setStudentFilter }) => {
+    return (
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(24,19,68,0.4)', backdropFilter: 'blur(4px)', zIndex: 110 }}
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              style={{
+                position: 'fixed', top: 0, right: 0, width: '100%', maxWidth: '480px', height: '100vh',
+                background: 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(20px)', boxShadow: '-10px 0 40px rgba(0,0,0,0.1)',
+                zIndex: 111, display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(255, 255, 255, 0.3)',
+                WebkitBackdropFilter: 'blur(20px)'
+              }}
+            >
+              <div style={{ padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+                    <Bell size={24} color="var(--primary)" /> Notifications
+                  </h2>
+                  <p className="label-metadata" style={{ textTransform: 'none', color: 'var(--on-surface-variant)' }}>
+                    {alerts.length} action items require your attention
+                  </p>
+                </div>
+                <button onClick={onClose} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--surface-high)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  <X size={20} color="var(--on-surface-variant)" />
+                </button>
+              </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
+                {alerts.length === 0 ? (
+                  <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.5, textAlign: 'center' }}>
+                    <CheckCircle2 size={64} color="#2e7d32" style={{ marginBottom: '1.5rem', opacity: 0.2 }} />
+                    <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>System Synchronized</p>
+                    <p style={{ fontSize: '0.85rem' }}>No pending transit gaps detected.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    {alerts.map((alert, i) => {
+                      const isHigh = alert.priority === 'high';
+                      return (
+                        <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="premium-card" style={{ padding: '1.25rem', background: 'white', borderLeft: `4px solid ${isHigh ? '#ff4d4d' : '#f1c40f'}`, boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                            <span style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: isHigh ? '#ff4d4d' : '#b7950b', background: isHigh ? 'rgba(255,77,77,0.1)' : 'rgba(241,196,15,0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                              {alert.type === 'walker_match' ? 'Priority 1: Car Match' : 
+                               alert.type === 'underused_bus' ? 'Priority 2: Underused' :
+                               alert.type === 'unserved_cluster' ? 'Priority 3: Cluster' :
+                               isHigh ? 'High Priority' : 'Optimization'}
+                            </span>
+                          </div>
+                          <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {alert.type === 'walker_match' ? <UserCheck size={18} /> : <MapPin size={18} />}
+                            {alert.dest || (alert.ownerName ? `${alert.ownerName}'s Car` : 'Route Alert')}
+                          </h4>
+                          <div style={{ marginBottom: '1rem' }}>
+                            {alert.issues?.map((issue, idx) => (
+                              <p key={idx} style={{ fontSize: '0.85rem', color: 'var(--on-surface-variant)', marginBottom: '0.4rem', lineWeight: 1.4 }}>• {issue}</p>
+                            ))}
+                            {alert.students && (<p style={{ fontSize: '0.75rem', color: 'rgba(0,0,0,0.4)', marginTop: '0.5rem' }}><strong>Affected:</strong> {alert.students.join(', ')}</p>)}
+                          </div>
+                          {alert.suggestions && (
+                            <div style={{ background: 'var(--surface-lowest)', padding: '0.75rem', borderRadius: '0.75rem', marginBottom: '1.25rem', border: '1px dashed var(--surface-high)' }}>
+                              <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Matches Detected</p>
+                              {alert.suggestions.map((sug, idx) => (
+                                <div key={idx} style={{ fontSize: '0.8rem', color: 'var(--on-surface-variant)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                                  <ArrowRight size={12} color="var(--secondary)" /> {sug}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {alert.recom ? (
+                             <div style={{ display: 'flex', gap: '0.75rem' }}>
+                               <button 
+                                 className="btn-primary" 
+                                 style={{ flex: 1.5, padding: '0.8rem', fontSize: '0.85rem', background: '#2e7d32', color: 'white', borderRadius: '0.75rem', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(46,125,50,0.2)' }}
+                                 onClick={() => {
+                                   onApply(alert.recom.studentIds, alert.recom.vehicleId, alert.recom.actionType);
+                                   onClose();
+                                 }}
+                               >
+                                 {alert.recom.title}
+                               </button>
+                               <button 
+                                 className="btn-minimal" 
+                                 style={{ 
+                                   flex: 1, padding: '0.8rem', fontSize: '0.85rem', 
+                                   color: 'rgba(0,0,0,0.5)', background: 'transparent', 
+                                   borderRadius: '0.75rem', border: '1px solid rgba(0,0,0,0.1)', 
+                                   fontWeight: 600, cursor: 'pointer',
+                                   transition: 'all 0.2s ease'
+                                 }}
+                                 onMouseOver={(e) => {
+                                   e.currentTarget.style.background = 'rgba(0,0,0,0.03)';
+                                   e.currentTarget.style.borderColor = 'rgba(0,0,0,0.2)';
+                                 }}
+                                 onMouseOut={(e) => {
+                                   e.currentTarget.style.background = 'transparent';
+                                   e.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)';
+                                 }}
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   onDismiss(alert.id);
+                                 }}
+                               >
+                                 Dismiss
+                               </button>
+                             </div>
+                           ) : (
+                             <button 
+                               className="btn-primary" 
+                               style={{ width: '100%', padding: '0.6rem', fontSize: '0.8rem' }}
+                               onClick={() => {
+                                 onClose();
+                                 if (alert.type === 'walker_match') {
+                                   setView('overview');
+                                   setStudentFilter('unassigned');
+                                 } else {
+                                   setView('overview');
+                                 }
+                               }}
+                             >
+                               Resolve Now
+                             </button>
+                           )}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div style={{ padding: '1.5rem', borderTop: '1px solid rgba(0,0,0,0.05)', display: 'flex', gap: '1rem' }}>
+                <button onClick={onClose} className="btn-minimal" style={{ flex: 1, padding: '0.75rem', color: 'var(--on-surface-variant)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                  <X size={18} /> Close
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    );
+  };
+
   const AssignmentModal = () => {
+
     if (!selectingFor) return null;
     const target = selectingFor.type === 'car' ? cars.find(c => c.id === selectingFor.id) : buses.find(b => b.id === selectingFor.id);
     const eligibleStudents = unassignedStudents.filter(s => {
@@ -431,7 +984,9 @@ const App = () => {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
            <h2 style={{ fontSize: '1.75rem' }}>Assign Students</h2>
-           <button onClick={() => setSelectingFor(null)} className="label-metadata" style={{ background: 'none', border: 'none' }}>Close</button>
+           <button onClick={() => setSelectingFor(null)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(0,0,0,0.05)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+             <X size={20} color="var(--on-surface-variant)" />
+           </button>
         </div>
 
         <div className="surface-card" style={{ marginBottom: '2rem', background: 'var(--primary)', color: 'white' }}>
@@ -451,8 +1006,9 @@ const App = () => {
                 style={{ marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                 onClick={() => {
                   assignStudent(student.id, target.id);
-                  setSelectingFor(null);
+                  // Removed auto-close for multi-student selection
                 }}
+
               >
                 <div>
                   <span style={{ fontWeight: 600 }}>{student.name}</span>
@@ -486,10 +1042,104 @@ const App = () => {
   // Views
   const OverviewView = () => (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="container">
-      <header className="section-gap" style={{ marginTop: '2rem' }}>
-        <p className="label-metadata">SUGU Coordination</p>
-        <h1 style={{ fontSize: '2.25rem', marginBottom: '1rem' }}>Transportation Dashboard</h1>
+      <header className="section-gap" style={{ marginTop: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <p className="label-metadata">SUGU Coordination</p>
+          <h1 style={{ fontSize: '2.25rem', marginBottom: '0.5rem' }}>Transportation Dashboard</h1>
+        </div>
+        {(() => {
+          const highCount = actionNeeded.filter(a => a.priority === 'high').length;
+          const medCount = actionNeeded.filter(a => a.priority === 'medium').length;
+          return (
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setNotificationsOpen(true)}
+              style={{
+                position: 'relative',
+                width: '52px',
+                height: '52px',
+                borderRadius: '1.25rem',
+                border: '1px solid rgba(255, 255, 255, 0.4)',
+                background: 'rgba(255, 255, 255, 0.65)',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 8px 32px rgba(31, 38, 135, 0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                WebkitBackdropFilter: 'blur(12px)'
+              }}
+            >
+              <motion.div
+                animate={highCount > 0 ? {
+                  rotate: [0, -10, 10, -10, 10, 0],
+                  transition: { repeat: Infinity, duration: 2.5, repeatDelay: 2 }
+                } : {}}
+              >
+                <Bell size={26} color={highCount > 0 ? '#ff4d4d' : 'var(--primary)'} fill={highCount > 0 ? 'rgba(255,77,77,0.1)' : 'transparent'} />
+              </motion.div>
+              
+              <div style={{ position: 'absolute', top: '-8px', right: '-8px', display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'center' }}>
+                <AnimatePresence>
+                  {highCount > 0 && (
+                     <motion.span 
+                       initial={{ scale: 0, opacity: 0 }}
+                       animate={{ scale: 1, opacity: 1 }}
+                       exit={{ scale: 0, opacity: 0 }}
+                       style={{ 
+                         background: '#ff4d4d', 
+                         color: 'white', 
+                         minWidth: '22px', 
+                         height: '22px', 
+                         display: 'flex', 
+                         alignItems: 'center', 
+                         justifyContent: 'center',
+                         fontSize: '0.7rem', 
+                         fontWeight: 900, 
+                         borderRadius: '11px', 
+                         border: '2.5px solid white',
+                         boxShadow: '0 4px 12px rgba(255,77,77,0.3)',
+                         zIndex: 2
+                       }}
+                     >
+                       {highCount}
+                     </motion.span>
+                  )}
+                  {medCount > 0 && (
+                     <motion.span 
+                       initial={{ scale: 0, opacity: 0 }}
+                       animate={{ scale: 1, opacity: 1 }}
+                       exit={{ scale: 0, opacity: 0 }}
+                       style={{ 
+                         background: '#f1c40f', 
+                         color: '#181344', 
+                         minWidth: '20px', 
+                         height: '20px', 
+                         display: 'flex', 
+                         alignItems: 'center', 
+                         justifyContent: 'center',
+                         fontSize: '0.65rem', 
+                         fontWeight: 900, 
+                         borderRadius: '10px', 
+                         border: '2.5px solid white',
+                         boxShadow: '0 4px 10px rgba(241,196,15,0.3)',
+                         zIndex: 1,
+                         marginTop: highCount > 0 ? '-6px' : '0'
+                       }}
+                     >
+                       {medCount}
+                     </motion.span>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.button>
+          );
+        })()}
       </header>
+
+
+
 
       {/* Hero Stats */}
       {(() => {
@@ -500,19 +1150,8 @@ const App = () => {
         const assignedCars = cars.filter(c => c.occupied > 0).length;
         const assignedBuses = buses.filter(b => b.occupied > 0).length;
         
-        // Calculate overcrowded routes
-        const allDestinations = new Set();
-        students.forEach(s => s.destination.split(',').forEach(d => allDestinations.add(d.trim())));
-        const routeAnalysis = [...allDestinations].map(dest => {
-          const studentsOnRoute = students.filter(s => s.destination.split(',').some(d => d.trim() === dest)).length;
-          const carSeatsOnRoute = cars.filter(c => c.destination.split(',').some(d => d.trim() === dest)).reduce((a, c) => a + c.totalSeats, 0);
-          const busSeatsOnRoute = buses.filter(b => b.destination.split(',').some(d => d.trim() === dest)).reduce((a, b2) => a + b2.totalSeats, 0);
-          const totalSeatsOnRoute = carSeatsOnRoute + busSeatsOnRoute;
-          return { dest, students: studentsOnRoute, seats: totalSeatsOnRoute, overcrowded: studentsOnRoute > totalSeatsOnRoute };
-        });
-        const overcrowdedRoutes = routeAnalysis.filter(r => r.overcrowded);
-
         return (<>
+
           <div className="premium-card" style={{ background: 'var(--primary)', color: 'white', padding: '1.5rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
               <div>
@@ -562,20 +1201,7 @@ const App = () => {
             </div>
           </div>
 
-          {/* Overcrowded Routes Warning */}
-          {overcrowdedRoutes.length > 0 && (
-            <div className="premium-card" style={{ padding: '1rem', border: '1px solid rgba(255,77,77,0.3)', background: 'rgba(255,77,77,0.04)' }}>
-              <p className="label-metadata" style={{ color: '#ff4d4d', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <AlertCircle size={14} /> Overcrowded Routes
-              </p>
-              {overcrowdedRoutes.map(r => (
-                <div key={r.dest} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,77,77,0.1)' }}>
-                  <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#ff4d4d' }}>{r.dest}</span>
-                  <span style={{ fontSize: '0.75rem', color: '#ff4d4d' }}>{r.students} students / {r.seats} seats</span>
-                </div>
-              ))}
-            </div>
-          )}
+
 
           {/* Detailed Stats Grid */}
           <div className="stat-grid">
@@ -710,12 +1336,14 @@ const App = () => {
               <div>
                 <h3 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>{students.find(s => s.id === car.ownerId)?.name}'s Car</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--on-surface-variant)' }}>
-                  <MapPin size={14} />
-                  <span className="label-metadata" style={{ textTransform: 'none' }}>{car.destination}</span>
+                  <div className="type-badge car-owner" style={{ fontSize: '0.5rem', padding: '0.1rem 0.3rem' }}>{getVehicleType(car.totalSeats)}</div>
+                  <MapPin size={10} />
+                  <span className="label-metadata" style={{ textTransform: 'none', fontSize: '0.65rem' }}>{car.destination}</span>
                   <span style={{ opacity: 0.2 }}>•</span>
-                  <Phone size={14} />
-                  <span className="label-metadata" style={{ textTransform: 'none' }}>{car.phone}</span>
+                  <Phone size={10} />
+                  <span className="label-metadata" style={{ textTransform: 'none', fontSize: '0.65rem' }}>{car.phone}</span>
                 </div>
+
               </div>
               <div style={{ textAlign: 'right', display: 'flex', gap: '1rem' }}>
                 <div style={{ textAlign: 'right' }}>
@@ -794,8 +1422,12 @@ const App = () => {
                 <button onClick={() => setEditingVehicle(bus)} style={{ background: 'none', border: 'none', color: 'var(--primary)', opacity: 0.6 }}><Pencil size={16} /></button>
                 <button onClick={() => handleDeleteVehicle(bus.id)} style={{ background: 'none', border: 'none', color: '#ff4d4d', opacity: 0.6 }}><Trash2 size={16} /></button>
               </div>
-              <h3 style={{ fontSize: '1.25rem' }}>Minibus</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                <h3 style={{ fontSize: '1.25rem' }}>Minibus</h3>
+                <div style={{ background: 'var(--secondary)', color: 'white', padding: '0.1rem 0.3rem', borderRadius: '0.3rem', fontSize: '0.5rem', fontWeight: 700 }}>{getVehicleType(bus.totalSeats)}</div>
+              </div>
               <p className="label-metadata">{bus.destination}</p>
+
               <div style={{ marginTop: '0.5rem', display: 'flex', gap: '1rem' }}>
                 <div>
                    <span className="label-metadata" style={{ display: 'block' }}>Seats</span>
@@ -867,7 +1499,8 @@ const App = () => {
         ) : (
           allAllocations.map(item => {
             const assignedPassengers = students.filter(s => s.assignedTo === item.id);
-            const ownerName = item.type === 'car' ? students.find(s => s.id === item.ownerId)?.name : null;
+            const owner = item.type === 'car' ? students.find(s => s.id === item.ownerId) : null;
+            const ownerName = (sharingLang === 'am' && translationCache[owner?.name]) ? translationCache[owner.name] : (owner?.name || 'Minibus');
             return (
             <div key={item.id} className="premium-card" style={{ padding: '0', overflow: 'hidden', marginBottom: '2.5rem' }}>
               <div 
@@ -885,7 +1518,14 @@ const App = () => {
 
                 {/* Title & metadata */}
                 <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-                  <h3 style={{ fontSize: '1.5rem', marginBottom: '0.35rem' }}>{item.type === 'car' ? `${ownerName}'s Car` : 'Minibus'}</h3>
+                  <p className="label-metadata" style={{ fontSize: '0.6rem', color: 'var(--primary)', marginBottom: '0.25rem', letterSpacing: '0.15em' }}>
+                    {TRANSLATIONS[sharingLang].title}
+                  </p>
+                  <h3 style={{ fontSize: '1.5rem', marginBottom: '0.35rem' }}>
+                    {item.type === 'car' 
+                      ? (sharingLang === 'am' ? `${TRANSLATIONS.am.ownerPrefix}${ownerName}${TRANSLATIONS.am.ownerSuffix}` : `${ownerName}${TRANSLATIONS.en.ownerSuffix}`)
+                      : TRANSLATIONS[sharingLang].minibus}
+                  </h3>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', color: 'var(--primary)', fontSize: '0.9rem' }}>
                     <MapPin size={16} />
                     <span style={{ fontWeight: 600 }}>{item.destination}</span>
@@ -898,7 +1538,7 @@ const App = () => {
                   )}
                   {item.tariff && (
                     <p style={{ marginTop: '0.35rem', color: 'var(--secondary)', fontWeight: 'bold', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Tariff: {item.tariff}
+                      {TRANSLATIONS[sharingLang].tariff}: {item.tariff}
                     </p>
                   )}
                 </div>
@@ -906,13 +1546,13 @@ const App = () => {
                 {/* Passenger list - single column, scales cleanly */}
                 <div style={{ background: 'var(--surface-low)', borderRadius: '0.75rem', padding: '1rem' }}>
                   <p style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--on-surface-variant)', marginBottom: '0.5rem', paddingBottom: '0.4rem', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                    Passengers ({assignedPassengers.length}/{item.totalSeats})
+                    {TRANSLATIONS[sharingLang].passengers} ({assignedPassengers.length}/{item.totalSeats})
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                     {assignedPassengers.map((s, i) => (
                       <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', padding: '0.25rem 0' }}>
                         <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
-                        <span style={{ fontWeight: 500 }}>{s.name}</span>
+                        <span style={{ fontWeight: 500 }}>{sharingLang === 'am' && translationCache[s.name] ? translationCache[s.name] : s.name}</span>
                       </div>
                     ))}
                   </div>
@@ -920,16 +1560,33 @@ const App = () => {
 
                 {/* Footer branding */}
                 <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-                  <p style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.35 }}>SUGU Transport Coordination © 2026</p>
+                  <p style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.35 }}>
+                    {TRANSLATIONS[sharingLang].footer} © 2026
+                  </p>
                 </div>
               </div>
 
               {/* Share button - NOT part of the exported card */}
-              <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--surface-high)', display: 'flex', gap: '1rem' }}>
+              <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--surface-high)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', background: 'var(--surface-high)', padding: '0.25rem', borderRadius: '0.75rem', gap: '0.25rem' }}>
+                  <button 
+                    onClick={() => setSharingLang('en')}
+                    style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', border: 'none', background: sharingLang === 'en' ? 'white' : 'transparent', color: sharingLang === 'en' ? 'var(--primary)' : 'var(--on-surface-variant)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}
+                  >
+                    English
+                  </button>
+                  <button 
+                    onClick={() => setSharingLang('am')}
+                    disabled={isTranslating}
+                    style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', border: 'none', background: sharingLang === 'am' ? 'white' : 'transparent', color: sharingLang === 'am' ? 'var(--primary)' : 'var(--on-surface-variant)', fontSize: '0.75rem', fontWeight: 700, cursor: isTranslating ? 'wait' : 'pointer', transition: 'all 0.2s' }}
+                  >
+                    {isTranslating ? 'Translating...' : 'አማርኛ'}
+                  </button>
+                </div>
                 <button 
                   className="btn-primary" 
                   onClick={() => handleShare(item.id)}
-                  style={{ flex: 1, padding: '0.75rem' }}
+                  style={{ width: '100%', padding: '0.75rem' }}
                 >
                   <Share2 size={18} /> Share Allocation
                 </button>
@@ -945,6 +1602,16 @@ const App = () => {
     <div style={{ minHeight: '100vh', paddingBottom: '80px' }}>
       <AssignmentModal />
       <AddVehicleModal />
+      <NotificationDrawer 
+        isOpen={notificationsOpen} 
+        onClose={() => setNotificationsOpen(false)} 
+        alerts={actionNeeded} 
+        onApply={handleApplyAssignment}
+        onDismiss={(id) => setDismissedAlertIds(prev => [...prev, id])}
+        setView={setView}
+        setStudentFilter={setStudentFilter}
+      />
+
 
       {/* Student Detail Modal */}
       {viewingStudent && (() => {
@@ -966,7 +1633,9 @@ const App = () => {
                     {s.type === 'car_owner' ? 'Car Owner' : 'Walking Student'}
                   </span>
                 </div>
-                <button onClick={() => setViewingStudent(null)} style={{ background: 'none', border: 'none' }}><X size={20} color="var(--on-surface-variant)" /></button>
+                <button onClick={() => setViewingStudent(null)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(0,0,0,0.05)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  <X size={20} color="var(--on-surface-variant)" />
+                </button>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1019,7 +1688,7 @@ const App = () => {
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-                <button onClick={() => setViewingStudent(null)} className="btn-primary" style={{ flex: 1, padding: '0.75rem' }}>Close</button>
+                <button onClick={() => setViewingStudent(null)} className="btn-primary" style={{ flex: 1, padding: '0.75rem' }}>Done</button>
               </div>
             </div>
           </motion.div>
@@ -1033,11 +1702,18 @@ const App = () => {
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(24,19,68,0.95)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
         >
           <div className="premium-card" style={{ width: '100%', maxWidth: '400px', background: 'white' }}>
-            <h2 style={{ marginBottom: '1.5rem' }}>{editingStudent ? 'Edit Student' : 'Add Student'}</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ marginBottom: 0 }}>{editingStudent ? 'Edit Student' : 'Add Student'}</h2>
+              <button onClick={() => { setAddingStudent(false); setEditingStudent(null); }} style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(0,0,0,0.05)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <X size={16} color="var(--on-surface-variant)" />
+              </button>
+            </div>
             <form onSubmit={handleAddStudent}>
               <div style={{ marginBottom: '1rem' }}>
-                <label className="label-metadata">Full Name</label>
-                <input name="name" required defaultValue={editingStudent?.name} placeholder="e.g. John Doe" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} />
+                <input 
+                  name="name" required defaultValue={editingStudent?.name} placeholder="e.g. John Doe" 
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-high)' }} 
+                />
               </div>
               <div style={{ marginBottom: '1rem' }}>
                 <label className="label-metadata">Phone</label>
@@ -1073,10 +1749,12 @@ const App = () => {
         <div className="import-preview-overlay">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <div>
-              <h2 style={{ color: 'white', fontFamily: 'Newsreader, serif' }}>Import Preview</h2>
+              <h2 style={{ color: 'white', fontFamily: 'NokiaPureheadline' }}>Import Preview</h2>
               <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{importPreview.length} rows found</p>
             </div>
-            <button onClick={() => setImportPreview(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)' }}><X size={24} /></button>
+            <button onClick={() => setImportPreview(null)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <X size={24} color="rgba(255,255,255,0.7)" />
+            </button>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', marginBottom: '1rem' }}>
@@ -1111,10 +1789,22 @@ const App = () => {
         </div>
       )}
 
-      {view === 'overview' && OverviewView()}
-      {view === 'cars' && CarFleetView()}
-      {view === 'minibuses' && MinibusView()}
-      {view === 'allocations' && AllocationsView()}
+      {isLoading ? (
+        <div style={{ height: '80vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', gap: '1.5rem' }}>
+          <div style={{ width: '40px', height: '40px', border: '3px solid var(--surface-high)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          <p className="label-metadata" style={{ letterSpacing: '0.2rem' }}>Synchronizing Dataset...</p>
+          <style>{`
+            @keyframes spin { to { transform: rotate(360deg); } }
+          `}</style>
+        </div>
+      ) : (
+        <>
+          {view === 'overview' && OverviewView()}
+          {view === 'cars' && CarFleetView()}
+          {view === 'minibuses' && MinibusView()}
+          {view === 'allocations' && AllocationsView()}
+        </>
+      )}
 
       {/* Navigation */}
       <nav className="glass-nav" style={{ position: 'fixed', top: 'auto', bottom: 0, width: '100%', display: 'flex', justifyContent: 'space-around', borderTop: '1px solid rgba(0,0,0,0.05)', borderBottom: 'none', zIndex: 10 }}>
@@ -1123,28 +1813,28 @@ const App = () => {
           style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', color: view === 'overview' ? 'var(--primary)' : 'var(--on-surface-variant)' }}
         >
           <Users size={24} />
-          <span className="label-metadata" style={{ fontSize: '0.6rem' }}>Overview</span>
+          <span className="label-metadata" style={{ fontSize: '0.7rem', fontWeight: 800 }}>Overview</span>
         </button>
         <button 
           onClick={() => setView('cars')}
           style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', color: view === 'cars' ? 'var(--primary)' : 'var(--on-surface-variant)' }}
         >
           <Car size={24} />
-          <span className="label-metadata" style={{ fontSize: '0.6rem' }}>Fleet</span>
+          <span className="label-metadata" style={{ fontSize: '0.7rem', fontWeight: 800 }}>Fleet</span>
         </button>
         <button 
           onClick={() => setView('minibuses')}
           style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', color: view === 'minibuses' ? 'var(--primary)' : 'var(--on-surface-variant)' }}
         >
           <Bus size={24} />
-          <span className="label-metadata" style={{ fontSize: '0.6rem' }}>Buses</span>
+          <span className="label-metadata" style={{ fontSize: '0.7rem', fontWeight: 800 }}>Buses</span>
         </button>
         <button 
           onClick={() => setView('allocations')}
           style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', color: view === 'allocations' ? 'var(--primary)' : 'var(--on-surface-variant)' }}
         >
           <Share2 size={24} />
-          <span className="label-metadata" style={{ fontSize: '0.6rem' }}>Sharing</span>
+          <span className="label-metadata" style={{ fontSize: '0.7rem', fontWeight: 800 }}>Sharing</span>
         </button>
       </nav>
     </div>
