@@ -267,12 +267,16 @@ const App = () => {
     await syncStudentToDb(updatedStudent);
   };
 
-  const handleApplyAssignment = async (studentIds, vehicleId, actionType = 'assign') => {
-    if (!studentIds || studentIds.length === 0) return;
+  const handleApplyAssignment = async (studentIds, vehicleId, actionType = 'assign', alertId = null) => {
+    // Optimistic: Dismiss alert immediately
+    if (alertId) {
+      setDismissedAlertIds(prev => [...prev, alertId]);
+    }
+
+    if (!studentIds || (studentIds.length === 0 && actionType === 'assign')) return;
 
     if (actionType === 'delete') {
-      const confirmed = window.confirm("Are you sure you want to release and delete this underused minibus?");
-      if (confirmed) await handleDeleteVehicle(vehicleId);
+      await handleDeleteVehicle(vehicleId, true); // true = skip confirmation
       return;
     }
 
@@ -702,8 +706,8 @@ const App = () => {
     setAddingVehicle(null);
   };
 
-  const handleDeleteVehicle = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this vehicle? All assigned students will be unassigned.")) return;
+  const handleDeleteVehicle = async (id, skipConfirm = false) => {
+    if (!skipConfirm && !window.confirm("Are you sure you want to delete this vehicle? All assigned students will be unassigned.")) return;
 
     // Unassign students locally
     setStudents(prev => prev.map(s => s.assignedTo === id ? { ...s, assignedTo: null } : s));
@@ -913,7 +917,7 @@ const App = () => {
                                  className="btn-primary" 
                                  style={{ flex: 1.5, padding: '0.8rem', fontSize: '0.85rem', background: '#2e7d32', color: 'white', borderRadius: '0.75rem', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(46,125,50,0.2)' }}
                                  onClick={() => {
-                                   onApply(alert.recom.studentIds, alert.recom.vehicleId, alert.recom.actionType);
+                                   onApply(alert.recom.studentIds, alert.recom.vehicleId, alert.recom.actionType, alert.id);
                                    onClose();
                                  }}
                                >
@@ -1640,7 +1644,7 @@ const App = () => {
         isOpen={notificationsOpen} 
         onClose={() => setNotificationsOpen(false)} 
         alerts={actionNeeded} 
-        onApply={handleApplyAssignment}
+        onApply={(studentIds, vehicleId, type, alertId) => handleApplyAssignment(studentIds, vehicleId, type, alertId)}
         onDismiss={(id) => setDismissedAlertIds(prev => [...prev, id])}
         setView={setView}
         setStudentFilter={setStudentFilter}
