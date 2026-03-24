@@ -329,9 +329,12 @@ const App = () => {
   // Detailed Action Needed Analysis (Logic moved here for scoping)
   const actionNeeded = useMemo(() => {
     const alerts = [];
-    const unassignedWalkers = students.filter(s => s.type === 'walking' && !s.assignedTo);
-    
-    // Helper: Path Matching with Null Guards
+    if (students.length === 0 || (updatedCars.length === 0 && updatedBuses.length === 0)) return alerts;
+
+    const unassignedStudents = students.filter(s => !s.assignedTo);
+    const unassignedWalkers = unassignedStudents.filter(s => s.type === 'walking');
+
+    // Helper: Path Matching
     const getPathSegments = (dest) => (dest || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
     const isCompatible = (vDest, sDest) => {
       const vSegments = getPathSegments(vDest);
@@ -341,125 +344,142 @@ const App = () => {
 
     // --- RED ALERT PRIORITY 1: Unassigned walker + Matching Car ---
     const matchedWalkerIds = new Set();
-    cars.filter(c => c.totalSeats - c.occupied > 0).forEach(car => {
+    updatedCars.filter(c => c.totalSeats - c.occupied > 0).forEach(car => {
       let freeSeats = car.totalSeats - car.occupied;
-      const compatibleWalkers = unassignedWalkers
+      const candidates = unassignedWalkers
         .filter(s => !matchedWalkerIds.has(s.id) && isCompatible(car.destination, s.destination))
         .sort((a, b) => {
-          // Priority: Farthest along driver's destination (more shared segments)
           const aShared = getPathSegments(a.destination).filter(seg => getPathSegments(car.destination).includes(seg)).length;
           const bShared = getPathSegments(b.destination).filter(seg => getPathSegments(car.destination).includes(seg)).length;
           return bShared - aShared;
         });
 
-      if (compatibleWalkers.length > 0) {
-        const toAssign = compatibleWalkers.slice(0, freeSeats);
-        toAssign.forEach(s => matchedWalkerIds.add(s.id));
-        const owner = students.find(s => s.id === car.ownerId);
-        alerts.push({
-          type: 'walker_match',
-          priority: 'high',
-          dest: car.destination,
-          students: toAssign.map(s => s.name),
-          issues: [`Critical: ${toAssign.length} matching walker(s) can fit in ${owner?.name}'s car.`],
-          recom: {
-            title: `Assign to ${owner?.name}'s Car`,
-            vehicleId: car.id,
-            studentIds: toAssign.map(s => s.id),
-            details: `Priority 1: Fill available car seats on ${car.destination} route.`
-          }
-        });
+      if (candidates.length > 0) {
+        const toAssign = candidates.slice(0, freeSeats);
+        const alertId = `match-car-${car.id}-${toAssign.map(s => s.id).sort().join('-')}`;
+        if (!dismissedAlertIds.includes(alertId)) {
+          alerts.push({
+            id: alertId,
+            priority: 'high',
+            type: 'walker_match',
+            ownerName: students.find(s => s.id === car.ownerId)?.name,
+            students: toAssign.map(s => s.name),
+            dest: car.destination,
+            recom: {
+              title: `Assign to ${students.find(s => s.id === car.ownerId)?.name}'s Car`,
+              actionType: 'assign',
+              studentIds: toAssign.map(s => s.id),
+              vehicleId: car.id,
+              details: `Priority 1: Fill car seats first. ${toAssign.length} student(s) match ${car.destination} route.`
+            }
+          });
+          toAssign.forEach(s => matchedWalkerIds.add(s.id));
+        }
       }
     });
 
     // --- RED ALERT PRIORITY 2: Underused Minibus (< 3 students) ---
-    buses.filter(bus => bus.occupied > 0 && bus.occupied < 3).forEach(bus => {
-      alerts.push({
-        type: 'underused_bus',
-        priority: 'high',
-        dest: bus.destination,
-        issues: [`Inefficiency: Minibus has only ${bus.occupied} student(s). Suggest removing.`],
-        recom: {
-          title: "Release & Reassign Minibus",
-          vehicleId: bus.id,
-          actionType: 'delete',
-          details: "Priority 2: Avoiding inefficient minibus rental for too few riders."
-        }
-      });
-    });
-
-    // --- RED ALERT PRIORITY 3: Unserved Cluster (> 3 students) ---
-    const remainingAfterP1 = unassignedWalkers.filter(s => !matchedWalkerIds.has(s.id));
-    const destGroups = {};
-    remainingAfterP1.forEach(s => {
-      const primaryDest = getPathSegments(s.destination)[0];
-      if (!destGroups[primaryDest]) destGroups[primaryDest] = [];
-      destGroups[primaryDest].push(s);
-    });
-
-    Object.entries(destGroups).forEach(([dest, group]) => {
-      if (group.length > 3) {
-        // Check if any car has space for this route (already checked in P1, but just in case of new cars)
-        const carMatch = cars.some(c => (c.totalSeats - c.occupied > 0) && isCompatible(c.destination, dest));
-        if (!carMatch) {
-          alerts.push({
-            type: 'unserved_cluster',
-            priority: 'high',
-            dest: toTitleCase(dest),
-            students: group.map(s => s.name),
-            issues: [`Cluster: ${group.length} unassigned students detected with no car coverage.`],
-            recom: {
-              title: "Rent New Minibus",
-              actionType: 'add_bus',
-              studentIds: group.map(s => s.id),
-              details: `Priority 3: Meaningful cluster on ${dest} route requires mass transit.`
-            }
-          });
-        }
-      }
-    });
-
-    // --- YELLOW ALERT PRIORITY 1: Stranded Students (1-2) ---
-    const finalUnassigned = students.filter(s => s.type === 'walking' && !s.assignedTo && !matchedWalkerIds.has(s.id));
-    if (finalUnassigned.length >= 1 && finalUnassigned.length <= 2) {
-      alerts.push({
-        type: 'stranded_students',
-        priority: 'medium',
-        issues: [`Stranded: ${finalUnassigned.length} student(s) remain without any assignment.`],
-        recom: {
-          title: "Assign to Any Available Seat",
-          studentIds: finalUnassigned.map(s => s.id),
-          details: "Yellow P1: Attempt to place in any car or minibus (at least to Taxi Station)."
-        }
-      });
-    }
-
-    // --- YELLOW ALERT PRIORITY 2: Car Optimization (Partial matching) ---
-    cars.filter(c => c.totalSeats - c.occupied > 0).forEach(car => {
-      // If this car wasn't fully utilized in P1
-      const isUsedInP1 = alerts.some(a => a.recom?.vehicleId === car.id);
-      if (!isUsedInP1) {
+    updatedBuses.filter(bus => bus.occupied < 3).forEach(bus => {
+      const alertId = `underused-bus-${bus.id}`;
+      if (!dismissedAlertIds.includes(alertId)) {
         alerts.push({
-          type: 'car_optimization',
-          priority: 'medium',
-          dest: car.destination,
-          issues: [`Unused Capacity: Car to ${car.destination} has free seats.`],
+          id: alertId,
+          priority: 'high',
+          type: 'underused_bus',
+          dest: bus.destination,
+          issues: [`Underused: Minibus only has ${bus.occupied} student(s) (threshold: 3).`],
           recom: {
-            title: "Offer Taxi Station Drop",
-            details: "Yellow P2: Suggest using seat for nearby walkers or partial segments."
+            title: "Release & Reassign",
+            actionType: 'delete',
+            vehicleId: bus.id,
+            details: "Priority 2: Release this minibus to save costs and reassign its students."
           }
         });
       }
     });
 
-    // --- FINAL FILTER: Remove Dismissed Alerts ---
-    return alerts.map(a => {
-      // Create a stable ID based on unique characteristics
-      const studentHash = a.recom?.studentIds ? [...a.recom.studentIds].sort().join('') : (a.students ? a.students.sort().join('') : '');
-      const id = `${a.type}_${a.dest || ''}_${studentHash}_${a.recom?.vehicleId || ''}`;
-      return { ...a, id };
-    }).filter(a => !dismissedAlertIds.includes(a.id));
-  }, [students, cars, buses, dismissedAlertIds]);
+    // --- RED ALERT PRIORITY 3: Unserved Cluster (> 3 students) ---
+    const remainingUnassigned = unassignedWalkers.filter(s => !matchedWalkerIds.has(s.id));
+    const grouped = {};
+    remainingUnassigned.forEach(s => {
+      const mainPath = s.destination.split(',')[0].trim();
+      if (!grouped[mainPath]) grouped[mainPath] = [];
+      grouped[mainPath].push(s);
+    });
+
+    Object.entries(grouped).forEach(([dest, group]) => {
+      if (group.length > 3) {
+        // Only if no car can take them
+        const hasCarMatch = updatedCars.some(c => c.totalSeats - c.occupied > 0 && isCompatible(c.destination, dest));
+        if (!hasCarMatch) {
+          const alertId = `cluster-${dest}`;
+          if (!dismissedAlertIds.includes(alertId)) {
+            alerts.push({
+              id: alertId,
+              priority: 'high',
+              type: 'unserved_cluster',
+              dest: dest,
+              issues: [`Cluster: ${group.length} unassigned students detected with no car coverage.`],
+              recom: {
+                title: "Rent New Minibus",
+                actionType: 'add_bus',
+                studentIds: group.map(s => s.id),
+                details: `Priority 3: Meaningful cluster on ${dest} route requires mass transit.`
+              }
+            });
+          }
+        }
+      }
+    });
+
+    // --- YELLOW ALERT PRIORITY 1: One or two students have no ride ---
+    const finalUnassigned = unassignedWalkers.filter(s => !matchedWalkerIds.has(s.id));
+    if (finalUnassigned.length > 0 && finalUnassigned.length <= 2) {
+      const alertId = `stranded-${finalUnassigned.map(s => s.id).sort().join('-')}`;
+      if (!dismissedAlertIds.includes(alertId)) {
+        alerts.push({
+          id: alertId,
+          priority: 'medium',
+          type: 'stranded_students',
+          issues: [`Stranded: ${finalUnassigned.length} student(s) remain without any assignment.`],
+          recom: {
+            title: "Assign to Any Available Seat",
+            studentIds: finalUnassigned.map(s => s.id),
+            details: "Yellow P1: Attempt to place in any car or minibus (at least to Taxi Station)."
+          }
+        });
+      }
+    }
+
+    // --- YELLOW ALERT PRIORITY 2: Car has free seat but no walker assigned ---
+    updatedCars.filter(c => c.totalSeats - c.occupied > 0).forEach(car => {
+      const alertId = `opti-${car.id}`;
+      // Only if not already suggested as a primary match in this run
+      const alreadyHandled = alerts.some(a => a.recom?.vehicleId === car.id);
+      if (!alreadyHandled && !dismissedAlertIds.includes(alertId)) {
+        alerts.push({
+          id: alertId,
+          priority: 'medium',
+          type: 'optimization',
+          ownerName: students.find(s => s.id === car.ownerId)?.name,
+          issues: [`Unused: This car still has ${car.totalSeats - car.occupied} free seats.`],
+          suggestions: ["Offer Taxi Station Drop", "Transport teachers", "Nearby walker segments"],
+          recom: null
+        });
+      }
+    });
+
+    return alerts.sort((a, b) => {
+      const getRank = (type) => {
+        if (type === 'walker_match') return 1;
+        if (type === 'underused_bus') return 2;
+        if (type === 'unserved_cluster') return 3;
+        if (type === 'stranded_students') return 4;
+        return 5;
+      };
+      return getRank(a.type) - getRank(b.type);
+    });
+  }, [students, updatedCars, updatedBuses, dismissedAlertIds]);
 
 
   // Student CRUD Handlers
