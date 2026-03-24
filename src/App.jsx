@@ -457,11 +457,11 @@ const App = () => {
           id: alertId,
           priority: 'medium',
           type: 'stranded_students',
-          issues: [`Stranded: ${finalUnassigned.length} student(s) remain without any assignment.`],
+          issues: [`Yellow P1: Stranded — ${finalUnassigned.length} student(s) remain without any assignment.`],
           recom: {
             title: "Assign to Any Available Seat",
             studentIds: finalUnassigned.map(s => s.id),
-            details: "Yellow P1: Attempt to place in any car or minibus (at least to Taxi Station)."
+            details: "Yellow P1: Suggest any seat of any available car/ Taxi Station fallback."
           }
         });
       }
@@ -478,8 +478,8 @@ const App = () => {
           priority: 'medium',
           type: 'optimization',
           ownerName: students.find(s => s.id === car.ownerId)?.name,
-          issues: [`Unused: This car still has ${car.totalSeats - car.occupied} free seats.`],
-          suggestions: ["Offer Taxi Station Drop", "Transport teachers", "Nearby walker segments"],
+          issues: [`Yellow P2: Spare Seat — This car still has ${car.totalSeats - car.occupied} free seats.`],
+          suggestions: ["Taxi Station Drop", "Teacher Drop-off", "Nearby walker segments"],
           recom: null
         });
       }
