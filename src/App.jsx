@@ -1340,10 +1340,10 @@ const App = () => {
 
   const CarFleetView = () => {
     const q = carSearch.toLowerCase();
-    const filteredCars = q ? cars.filter(car => {
+    const filteredCars = q ? updatedCars.filter(car => {
       const ownerName = students.find(s => s.id === car.ownerId)?.name || '';
       return ownerName.toLowerCase().includes(q) || car.destination.toLowerCase().includes(q) || car.phone?.toLowerCase().includes(q);
-    }) : cars;
+    }) : updatedCars;
     return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="container">
       <header className="section-gap" style={{ marginTop: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1423,9 +1423,9 @@ const App = () => {
 
   const MinibusView = () => {
     const q = busSearch.toLowerCase();
-    const filteredBuses = q ? buses.filter(bus =>
+    const filteredBuses = q ? updatedBuses.filter(bus =>
       bus.destination.toLowerCase().includes(q) || bus.tariff?.toLowerCase().includes(q)
-    ) : buses;
+    ) : updatedBuses;
     return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="container">
       <header className="section-gap" style={{ marginTop: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
